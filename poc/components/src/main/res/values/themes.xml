@@ -1,0 +1,7 @@
+<resources>
+    <!-- Окно поверх обоев, затемнение рисует Compose. -->
+    <style name="Theme.Search" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>
