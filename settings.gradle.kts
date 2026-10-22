@@ -16,6 +16,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "flexible-search"
 
-// Proof of concept: каждый — отдельное приложение со своим applicationId,
-// ставятся рядом.
-include(":poc:components")
+include(
+    ":core",
+    ":app",
+)
+
+// Эксперименты кладутся в poc/<имя>: отдельный модуль со своим
+// applicationId, ставится рядом.
