@@ -272,15 +272,14 @@ class SearchEngine(
     },
 ) {
     /**
-     * Результаты для потока запросов. Пока новый запрос не ответил, видны
-     * прежние результаты с `loading`, без мигания пустым списком.
+     * Результаты для потока запросов. Группа прежнего запроса остаётся на
+     * месте, пока её провайдер не ответил на новый: группы не мигают.
      */
     fun results(queries: Flow<SearchQuery>): Flow<SearchState> =
         channelFlow {
             var last = SearchState.Empty
             queries.collectLatest { query ->
-                send(SearchState(last.groups, loading = true))
-                search(query).collect {
+                search(query, last.groups).collect {
                     last = it
                     send(it)
                 }
@@ -291,7 +290,10 @@ class SearchEngine(
      * С триггером — только его провайдеры, даже при пустом тексте. Без
      * триггера — глобальные, на пустой текст — только с `onEmpty`.
      */
-    private fun search(query: SearchQuery): Flow<SearchState> {
+    private fun search(
+        query: SearchQuery,
+        previous: List<ResultGroup>,
+    ): Flow<SearchState> {
         val selected =
             providers.withIndex().filter { (_, provider) ->
                 when {
@@ -304,7 +306,12 @@ class SearchEngine(
             }
         return channelFlow {
             val mutex = Mutex()
-            val lists = arrayOfNulls<List<ResultItem>>(selected.size)
+            val stale = previous.associate { it.key to it.items }
+            val lists =
+                Array(selected.size) { index ->
+                    val (number, provider) = selected[index]
+                    stale[groupKey(number, provider)]
+                }
             val answered = BooleanArray(selected.size)
             val finished = BooleanArray(selected.size)
 
@@ -316,7 +323,7 @@ class SearchEngine(
                         if (items.isNullOrEmpty())
                             return@mapIndexedNotNull null
                         ResultGroup(
-                            key = "$number/${provider.pluginId}",
+                            key = groupKey(number, provider),
                             pluginId = provider.pluginId,
                             title = provider.title,
                             icon = provider.icon,
@@ -329,7 +336,7 @@ class SearchEngine(
                 send(SearchState(groups, loading = !answered.all { it }))
             }
 
-            if (selected.isEmpty()) publish()
+            publish()
             val timeLimitMs = providerTimeLimitMs()
             selected.forEachIndexed { index, (_, provider) ->
                 launch(dispatcher) {
@@ -351,6 +358,7 @@ class SearchEngine(
                     }
                     // Закончил, даже не ответив: ждать больше нечего.
                     mutex.withLock {
+                        if (!answered[index]) lists[index] = null
                         answered[index] = true
                         finished[index] = true
                         publish()
@@ -360,6 +368,9 @@ class SearchEngine(
         }
             .conflate()
     }
+
+    private fun groupKey(number: Int, provider: RegisteredProvider) =
+        "$number/${provider.pluginId}"
 
     companion object {
         const val DEFAULT_PROVIDER_TIME_LIMIT_MS = 30_000L

@@ -1,6 +1,9 @@
 package com.zemlianikin.flexiblesearch.poc.components.core
 
 import android.os.SystemClock
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +73,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
@@ -94,7 +100,7 @@ class SearchLayoutProps(
 )
 
 data class SearchLayoutStyle(
-    val scrim: Color,
+    val background: Color,
     val padding: PaddingValues,
     val spacing: Dp,
 )
@@ -104,7 +110,7 @@ val SearchLayout =
         name = "SearchLayout",
         defaultStyle = {
             SearchLayoutStyle(
-                Color.Black.copy(alpha = 0.45f),
+                MaterialTheme.colorScheme.surface,
                 PaddingValues(12.dp),
                 12.dp,
             )
@@ -112,7 +118,7 @@ val SearchLayout =
     ) { props, style ->
         Box(
             Modifier.fillMaxSize()
-                .background(style.scrim)
+                .background(style.background)
                 // Нажатие мимо результатов закрывает поиск, как в Pixel
                 // Search.
                 .clickable(
@@ -420,13 +426,40 @@ class ResultsProps(
     val onShowAll: (Trigger) -> Unit,
 )
 
-data class ResultsStyle(val spacing: Dp, val maxRowsPerGroup: Int)
+data class ResultsStyle(
+    val spacing: Dp,
+    val maxRowsPerGroup: Int,
+    /** Жёсткость пружины анимации групп: больше — быстрее. */
+    val animationStiffness: Float,
+)
+
+/**
+ * Жёсткость пружин анимации результатов по умолчанию: в 1,5 раза быстрее
+ * стандартной у `animateItem` (время пружины ~ 1/√жёсткости).
+ */
+const val ResultAnimationStiffness = Spring.StiffnessMediumLow * 2.25f
+
+/** `animateItem` с одной жёсткостью для появления, сдвига и исчезания. */
+fun LazyItemScope.itemAnimation(stiffness: Float): Modifier =
+    Modifier.animateItem(
+        fadeInSpec = spring(stiffness = stiffness),
+        placementSpec =
+            spring(
+                stiffness = stiffness,
+                visibilityThreshold = IntOffset.VisibilityThreshold,
+            ),
+        fadeOutSpec = spring(stiffness = stiffness),
+    )
 
 val Results =
     Component<ResultsProps, ResultsStyle>(
         name = "Results",
         defaultStyle = {
-            ResultsStyle(spacing = 8.dp, maxRowsPerGroup = 3)
+            ResultsStyle(
+                spacing = 8.dp,
+                maxRowsPerGroup = 3,
+                animationStiffness = ResultAnimationStiffness,
+            )
         },
     ) { props, style ->
         val target =
@@ -445,18 +478,22 @@ val Results =
             modifier = Modifier.fillMaxWidth(),
         ) {
             items(groups, key = { it.key }) { group ->
-                ResultSection(
-                    ResultSectionProps(
-                        group,
-                        target,
-                        maxRows =
-                            if (group.complete) Int.MAX_VALUE
-                            else style.maxRowsPerGroup,
-                        props.onClick,
-                        props.onFill,
-                        props.onShowAll,
+                // Группы, которые появились или пропали, не сдвигают
+                // соседей рывком.
+                Box(itemAnimation(style.animationStiffness)) {
+                    ResultSection(
+                        ResultSectionProps(
+                            group,
+                            target,
+                            maxRows =
+                                if (group.complete) Int.MAX_VALUE
+                                else style.maxRowsPerGroup,
+                            props.onClick,
+                            props.onFill,
+                            props.onShowAll,
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -469,13 +506,18 @@ class WidgetAreaProps(
     val onFill: (String) -> Unit,
 )
 
-data class WidgetAreaStyle(val spacing: Dp)
+data class WidgetAreaStyle(val spacing: Dp, val animationStiffness: Float)
 
 /** Список; pager или сетку можно сделать плагином через `override`. */
 val WidgetArea =
     Component<WidgetAreaProps, WidgetAreaStyle>(
         name = "WidgetArea",
-        defaultStyle = { WidgetAreaStyle(spacing = 8.dp) },
+        defaultStyle = {
+            WidgetAreaStyle(
+                spacing = 8.dp,
+                animationStiffness = ResultAnimationStiffness,
+            )
+        },
     ) { props, style ->
         LazyColumn(
             reverseLayout = true,
@@ -484,16 +526,18 @@ val WidgetArea =
             modifier = Modifier.fillMaxWidth(),
         ) {
             items(props.widgets, key = { it.key }) { widget ->
-                ResultSection(
-                    ResultSectionProps(
-                        widget,
-                        target = null,
-                        maxRows = Int.MAX_VALUE,
-                        props.onClick,
-                        props.onFill,
-                        onShowAll = {},
+                Box(itemAnimation(style.animationStiffness)) {
+                    ResultSection(
+                        ResultSectionProps(
+                            widget,
+                            target = null,
+                            maxRows = Int.MAX_VALUE,
+                            props.onClick,
+                            props.onFill,
+                            onShowAll = {},
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -946,6 +990,8 @@ data class AppRowStyle(
     val containerColor: Color,
     val shape: Shape,
     val maxApps: Int,
+    /** Жёсткость пружины, с которой иконки едут и проявляются. */
+    val animationStiffness: Float,
 )
 
 val AppRow =
@@ -956,6 +1002,7 @@ val AppRow =
                 MaterialTheme.colorScheme.surfaceContainer,
                 RoundedCornerShape(24.dp),
                 maxApps = 5,
+                animationStiffness = ResultAnimationStiffness,
             )
         },
     ) { props, style ->
@@ -964,26 +1011,49 @@ val AppRow =
             shape = style.shape,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(Modifier.padding(8.dp)) {
-                for (app in props.apps.take(style.maxApps)) {
+            // Ленивый ряд ради `animateItem`: иконка, оставшаяся в
+            // результатах, едет на новое место, а не перескакивает.
+            LazyRow(
+                userScrollEnabled = false,
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+            ) {
+                items(
+                    keyedApps(props.apps.take(style.maxApps)),
+                    key = { it.first },
+                ) { (_, app) ->
                     AppIcon(
                         AppIconProps(
                             app,
                             app == props.target,
-                            Modifier.weight(1f),
+                            // Ширина места фиксирована: при 1–4 результатах
+                            // иконки не растягиваются.
+                            Modifier.fillParentMaxWidth(1f / style.maxApps)
+                                .then(
+                                    itemAnimation(style.animationStiffness)
+                                ),
                         ) {
                             props.onClick(app)
                         }
                     )
                 }
-                // Пустые места, чтобы иконки не растягивались при 1–4
-                // результатах.
-                repeat(style.maxApps - props.apps.size) {
-                    Spacer(Modifier.weight(1f))
-                }
             }
         }
     }
+
+/**
+ * Ключи плиток для ленивого ряда. В общий ряд попадают плитки разных
+ * плагинов, и `id` может совпасть — такие получают номер.
+ */
+private fun keyedApps(
+    apps: List<ResultItem.App>
+): List<Pair<String, ResultItem.App>> {
+    val seen = mutableMapOf<String, Int>()
+    return apps.map { app ->
+        val count = seen.getOrElse(app.id) { 0 }
+        seen[app.id] = count + 1
+        "${app.id}#$count" to app
+    }
+}
 
 class AppIconProps(
     val app: ResultItem.App,

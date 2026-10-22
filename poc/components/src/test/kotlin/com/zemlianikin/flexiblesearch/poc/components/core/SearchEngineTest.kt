@@ -238,6 +238,54 @@ class SearchEngineTest {
     }
 
     @Test
+    fun slowGroupKeepsPreviousResultsUntilItAnswers() = runTest {
+        val fast: ResultProvider = { flowOf(results("fast:$it")) }
+        val slow: ResultProvider = { query ->
+            flow {
+                delay(300)
+                emit(results("slow:$query"))
+            }
+        }
+        val requests = MutableStateFlow(SearchQuery("a"))
+        val states = mutableListOf<SearchState>()
+        backgroundScope.launch {
+            engine("fast" to fast, "slow" to slow)
+                .results(requests)
+                .collect {
+                    states += it
+                }
+        }
+        advanceTimeBy(400)
+        requests.value = SearchQuery("ab")
+        advanceTimeBy(100)
+        runCurrent()
+        assertEquals(listOf("fast:ab", "slow:a"), states.last().ids())
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals(listOf("fast:ab", "slow:ab"), states.last().ids())
+    }
+
+    @Test
+    fun silentProviderDropsPreviousResults() = runTest {
+        val echo: ResultProvider = { query ->
+            if (query == "a") flowOf(results("a")) else flow {}
+        }
+        val requests = MutableStateFlow(SearchQuery("a"))
+        val states = mutableListOf<SearchState>()
+        backgroundScope.launch {
+            engine("echo" to echo).results(requests).collect {
+                states += it
+            }
+        }
+        runCurrent()
+        assertEquals(listOf("a"), states.last().ids())
+        requests.value = SearchQuery("ab")
+        runCurrent()
+        assertEquals(emptyList(), states.last().ids())
+        assertFalse(states.last().loading)
+    }
+
+    @Test
     fun failedOrStuckProviderKeepsItsLastResults() = runTest {
         val failing: ResultProvider = {
             flow {

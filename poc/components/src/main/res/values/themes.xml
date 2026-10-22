@@ -1,7 +1,7 @@
 <resources>
-    <!-- Окно поверх обоев, затемнение рисует Compose. -->
-    <style name="Theme.Search" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowShowWallpaper">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
+    <!-- Пока без обоев: при запуске с иконки сквозь прозрачный фон виден лаунчер. -->
+    <style name="Theme.Search" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>
