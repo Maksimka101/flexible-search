@@ -3,10 +3,10 @@ package com.zemlianikin.flexiblesearch
 import android.app.Application
 import com.zemlianikin.flexiblesearch.core.PluginHost
 import com.zemlianikin.flexiblesearch.plugins.AppsPlugin
-import com.zemlianikin.flexiblesearch.plugins.CalculatorPlugin
 import com.zemlianikin.flexiblesearch.plugins.PillSearchBarPlugin
 import com.zemlianikin.flexiblesearch.plugins.SearchInAppsPlugin
 import com.zemlianikin.flexiblesearch.plugins.TogglesPlugin
+import com.zemlianikin.flexiblesearch.plugins.converter.ConverterPlugin
 import com.zemlianikin.flexiblesearch.plugins.mocks.MocksPlugin
 
 class SearchApp : Application() {
@@ -24,7 +24,7 @@ class SearchApp : Application() {
                 // у клавиатуры.
                 SearchInAppsPlugin(),
                 AppsPlugin(),
-                CalculatorPlugin(),
+                ConverterPlugin(),
                 TogglesPlugin(),
                 // Веб и файлы после калькулятора, погода после кнопок.
                 MocksPlugin(),

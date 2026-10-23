@@ -31,6 +31,8 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation(libs.activity.compose)
+    implementation(libs.kotlinx.datetime)
+    implementation(libs.lifecycle.runtime.compose)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.coroutines.test)
 }

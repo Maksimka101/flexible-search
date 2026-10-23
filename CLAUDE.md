@@ -14,7 +14,8 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   (kotlinx.serialization).
 - `app/` — хост (`com.zemlianikin.flexiblesearch`) и встроенные плагины в `plugins/`
   (пишутся только через `PluginScope`): поиск приложений
-  (и по переводам названий), калькулятор (`calc `, `=`),
+  (и по переводам названий), калькулятор и конвертер валют (`ca `, `=`;
+  `plugins/converter/` — порт `~/develop/currency-converter` со своим нампадом),
   «искать в…», строка-«таблетка», фонарик и кнопки. `plugins/mocks/` — один
   `MocksPlugin` с моками веба, файлов и погоды.
 - `poc/<имя>` — эксперименты: отдельный модуль со своим `applicationId`, ставится
