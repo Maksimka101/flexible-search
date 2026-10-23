@@ -1,7 +1,10 @@
 package com.zemlianikin.flexiblesearch.plugins.converter.ui
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,75 +28,83 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val NUMPAD_PREF = "numpad"
 
 /**
- * Режим ввода и место под клавиатуру в текущем кадре. [numpad] — свои
- * кнопки вместо системной клавиатуры, [toggle] меняет режим, последний
- * запоминается. [reserve] — пустое место под выезжающую клавиатуру,
- * [numpadHeight] — высота блока numpad (`null`, пока высоту системной
- * клавиатуры не видели).
+ * Режим ввода: [numpad] — свои кнопки вместо системной клавиатуры, [toggle]
+ * меняет режим, последний запоминается. [space] — сколько занимает
+ * системная клавиатура над навбаром: столько же занимает numpad, и
+ * остальной экран при смене не двигается.
  */
 class KeyboardLayout(
     val numpad: Boolean,
-    val reserve: Dp,
-    val numpadHeight: Dp?,
+    val space: Dp,
     val toggle: () -> Unit,
 )
 
-/**
- * Экран не прыгает при смене режима: в numpad вместо клавиатуры блок её
- * высоты, а пока клавиатура выезжает обратно, место под неё уже
- * зарезервировано. Окно поиска само отступает от клавиатуры (`imePadding`),
- * поэтому резерв — только то, до чего она ещё не доросла.
- */
-@OptIn(FlowPreview::class)
 @Composable
 fun keyboardLayout(prefs: KeyValueStore): KeyboardLayout {
     var numpad by remember { mutableStateOf(prefs[NUMPAD_PREF] != "false") }
     val keyboardHeight = rememberKeyboardHeight(prefs)
     val density = LocalDensity.current
-    val ime = WindowInsets.ime
-    var keyboardComing by remember { mutableStateOf(false) }
-    LaunchedEffect(keyboardComing) {
-        if (keyboardComing) {
-            // Снимаем резерв, когда IME дорос до запомненной высоты
-            // (отступ тогда не меняется) или встал на месте (высота
-            // изменилась). Раньше нельзя: отступ просел бы, а потом снова
-            // вырос.
-            val full = keyboardHeight.px - 2
-            withTimeoutOrNull(1500) {
-                snapshotFlow { ime.getBottom(density) }
-                    .debounce { if (it >= full) 0L else 200L }
-                    .first { it > 0 }
-            }
-            keyboardComing = false
-        }
-    }
     val bar = WindowInsets.navigationBars.getBottom(density)
-    val reserve =
-        if (keyboardComing) {
-            val bottom = maxOf(bar, ime.getBottom(density))
-            with(density) {
-                (keyboardHeight.px - bottom).coerceAtLeast(0).toDp()
-            }
-        } else {
-            0.dp
-        }
-    val numpadHeight =
-        if (keyboardHeight.px == 0) null
-        else
-            with(density) {
-                (keyboardHeight.px - bar).toDp().coerceAtLeast(240.dp)
-            }
+    // Клавиатуру ещё не видели — обычная для телефона высота.
+    val space =
+        if (keyboardHeight.px == 0) 330.dp
+        else with(density) { (keyboardHeight.px - bar).toDp() }
     return KeyboardLayout(
         numpad,
-        reserve,
-        numpadHeight,
+        space,
         toggle = {
             numpad = !numpad
-            keyboardComing = !numpad
             prefs[NUMPAD_PREF] = numpad.toString()
         },
     )
 }
+
+/**
+ * Отступ экрана от системной клавиатуры: в конвертере ([active]) и сразу
+ * после него, иначе [default]. Numpad сам стоит на месте клавиатуры, и с
+ * ним отступа нет сразу, не дожидаясь, пока клавиатура уедет: иначе numpad
+ * на кадр встаёт над ней. Без numpad — конечная высота клавиатуры, без
+ * анимации. Когда клавиатура снова нужна (выход, смена режима), система ещё
+ * ~150 мс не знает её высоту: пока — запомненная, иначе экран падает на
+ * место numpad и поднимается обратно.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun KeyboardLayout.insets(
+    active: Boolean,
+    default: WindowInsets,
+): WindowInsets {
+    val shown = active && numpad
+    val density = LocalDensity.current
+    val ime = WindowInsets.ime
+    val target = WindowInsets.imeAnimationTarget
+    // Numpad был, а клавиатура ещё не встала.
+    var settling by remember { mutableStateOf(false) }
+    LaunchedEffect(shown) {
+        if (shown) {
+            settling = true
+        } else if (settling) {
+            // Клавиатура может и не появиться: физическая, смахнули.
+            withTimeoutOrNull(SETTLE_TIMEOUT_MS) {
+                snapshotFlow {
+                    val bottom = ime.getBottom(density)
+                    bottom > 0 && bottom == target.getBottom(density)
+                }
+                    .first { it }
+            }
+            settling = false
+        }
+    }
+    return when {
+        shown -> WindowInsets(0)
+        settling && target.getBottom(density) == 0 ->
+            WindowInsets(bottom = space).add(WindowInsets.navigationBars)
+        active || settling -> target
+        else -> default
+    }
+}
+
+private const val SETTLE_TIMEOUT_MS = 1000L
 
 /**
  * Последняя высота системной клавиатуры в px от нижнего края экрана (вместе

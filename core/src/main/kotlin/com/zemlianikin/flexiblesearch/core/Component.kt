@@ -1,7 +1,10 @@
 package com.zemlianikin.flexiblesearch.core
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 
 typealias ComponentContent<P, S> = @Composable (props: P, style: S) -> Unit
@@ -32,10 +35,10 @@ class Component<P, S>(
         val registry = LocalComponents.current
         var style = defaultStyle()
         for (transform in registry.stylesOf(this)) style = transform(style)
+        val overrides = registry.overridesOf(this)
         val render =
-            remember(registry) {
-                registry.overridesOf(this).fold(content) { inner, override
-                    ->
+            remember(overrides) {
+                overrides.fold(content) { inner, override ->
                     val wrapped: ComponentContent<P, S> = { p, s ->
                         override(p, s, inner)
                     }
@@ -49,29 +52,33 @@ class Component<P, S>(
 }
 
 /**
- * Стили и переопределения компонентов. Заполняется при установке плагинов,
- * потом не меняется.
+ * Стили и переопределения компонентов. Плагин может добавить их и после
+ * install, из любого потока: состояние Compose, компоненты перерисуются.
  */
 class ComponentRegistry {
     // Типы P и S связаны с ключом-компонентом, поэтому значения хранятся
     // как Any и приводятся при чтении.
-    private val styles = mutableMapOf<Component<*, *>, MutableList<Any>>()
-    private val overrides =
-        mutableMapOf<Component<*, *>, MutableList<Any>>()
+    private var styles by
+        mutableStateOf(emptyMap<Component<*, *>, List<Any>>())
+    private var overrides by
+        mutableStateOf(emptyMap<Component<*, *>, List<Any>>())
 
     fun <P, S> addStyle(
         component: Component<P, S>,
         transform: StyleTransform<S>,
-    ) {
-        styles.getOrPut(component) { mutableListOf() } += transform
-    }
+    ) =
+        synchronized(this) {
+            styles += component to styles[component].orEmpty() + transform
+        }
 
     fun <P, S> addOverride(
         component: Component<P, S>,
         override: ComponentOverride<P, S>,
-    ) {
-        overrides.getOrPut(component) { mutableListOf() } += override
-    }
+    ) =
+        synchronized(this) {
+            overrides +=
+                component to overrides[component].orEmpty() + override
+        }
 
     @Suppress("UNCHECKED_CAST")
     fun <P, S> stylesOf(

@@ -20,6 +20,19 @@ android {
         compose = true
     }
 
+    buildTypes {
+        release {
+            // Свой телефон: ставится поверх debug, данные остаются.
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
+
     // android.util.Log в юнит-тестах ничего не делает, а не падает.
     testOptions { unitTests.isReturnDefaultValues = true }
 }

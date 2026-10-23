@@ -48,7 +48,7 @@ internal object WebSuggestionsMock {
         for (ending in endings) {
             val text = typed + ending
             val completion = (typed.length until text.length).toList()
-            suggestion(text, highlights = completion) {
+            suggestion(text, highlights = completion, id = text) {
                 context.startActivity(
                     Intent(Intent.ACTION_WEB_SEARCH)
                         .putExtra(SearchManager.QUERY, text)

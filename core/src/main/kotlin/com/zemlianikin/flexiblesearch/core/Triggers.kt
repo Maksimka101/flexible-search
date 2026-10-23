@@ -1,6 +1,6 @@
 package com.zemlianikin.flexiblesearch.core
 
-import android.util.Log
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Префикс-команда: `calc 2+2`, `=2+2`. Пока префикс в строке, запрос
@@ -43,22 +43,9 @@ data class SearchQuery(val text: String = "", val trigger: Trigger? = null)
  * Находит префикс в начале строки, см. [separatorAfter]. Регистр не важен.
  * При одинаковых префиксах побеждает первый зарегистрированный.
  */
-class TriggerParser(private val triggers: List<Trigger>) {
-    init {
-        val seen = HashMap<String, Trigger>()
-        for (trigger in triggers) for (prefix in trigger.prefixes) {
-            val owner = seen.putIfAbsent(prefix.lowercase(), trigger)
-            if (owner != null) {
-                Log.w(
-                    TAG,
-                    "\"$prefix\" of ${trigger.id} taken by ${owner.id}",
-                )
-            }
-        }
-    }
-
+class TriggerParser(private val triggers: StateFlow<List<Trigger>>) {
     fun parse(input: String): SearchQuery {
-        for (trigger in triggers) for (prefix in trigger.prefixes) {
+        for (trigger in triggers.value) for (prefix in trigger.prefixes) {
             val start = prefix + separatorAfter(prefix)
             if (input.startsWith(start, ignoreCase = true)) {
                 return SearchQuery(input.substring(start.length), trigger)
@@ -67,9 +54,5 @@ class TriggerParser(private val triggers: List<Trigger>) {
         return SearchQuery(input)
     }
 
-    fun byId(id: String?): Trigger? = triggers.find { it.id == id }
-
-    private companion object {
-        const val TAG = "TriggerParser"
-    }
+    fun byId(id: String?): Trigger? = triggers.value.find { it.id == id }
 }

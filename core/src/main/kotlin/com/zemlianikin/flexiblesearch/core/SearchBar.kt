@@ -8,11 +8,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -58,6 +59,20 @@ data class SearchBarProps(
     val keyboardType: KeyboardType = KeyboardType.Text,
     /** null — подсказка из стиля. */
     val placeholder: String? = null,
+    /**
+     * Текст с курсором и выделением, когда его правит не только поле (свой
+     * numpad плагина). null — поле держит курсор само, а наружу отдаёт
+     * только текст через [onTextChange]. С [onValueChange] [onTextChange]
+     * не зовётся: текст в запрос отдаёт владелец [value].
+     */
+    val value: TextFieldValue? = null,
+    val onValueChange: ((TextFieldValue) -> Unit)? = null,
+    /** Как рисовать текст, например подчеркнуть ошибку. */
+    val visualTransformation: VisualTransformation =
+        VisualTransformation.None,
+    /** Кнопки справа, `PluginScope.searchBarAction`. */
+    val actions: List<QuickAction> = emptyList(),
+    val onAction: (QuickAction) -> Unit = {},
 )
 
 data class SearchBarStyle(
@@ -77,8 +92,8 @@ val SearchBar =
             SearchBarStyle(
                 containerColor = colors.surfaceContainerHigh,
                 contentColor = colors.onSurface,
-                shape = RoundedCornerShape(16.dp),
-                height = 52.dp,
+                shape = CircleShape,
+                height = 56.dp,
                 textStyle = MaterialTheme.typography.bodyLarge,
                 placeholder = "Search apps, calculate",
             )
@@ -126,18 +141,26 @@ val SearchBar =
                         )
                     }
                     val value =
-                        if (edited.text == props.text) edited
-                        else
-                            TextFieldValue(
-                                props.text,
-                                TextRange(props.text.length),
-                            )
+                        when {
+                            props.value != null -> props.value
+                            edited.text == props.text -> edited
+                            else ->
+                                TextFieldValue(
+                                    props.text,
+                                    TextRange(props.text.length),
+                                )
+                        }
                     BasicTextField(
                         value = value,
                         onValueChange = {
-                            edited = it
-                            if (it.text != props.text)
-                                props.onTextChange(it.text)
+                            val external = props.onValueChange
+                            if (external != null) {
+                                external(it)
+                            } else {
+                                edited = it
+                                if (it.text != props.text)
+                                    props.onTextChange(it.text)
+                            }
                         },
                         singleLine = true,
                         textStyle =
@@ -145,6 +168,7 @@ val SearchBar =
                                 color = style.contentColor
                             ),
                         cursorBrush = SolidColor(style.contentColor),
+                        visualTransformation = props.visualTransformation,
                         keyboardOptions =
                             KeyboardOptions(
                                 keyboardType = props.keyboardType,
@@ -168,6 +192,15 @@ val SearchBar =
                                     exit
                                 },
                     )
+                }
+                for (action in props.actions) {
+                    IconButton(onClick = { props.onAction(action) }) {
+                        ActionIconImage(
+                            action.icon,
+                            Modifier.size(24.dp),
+                            contentDescription = action.label,
+                        )
+                    }
                 }
             }
         }

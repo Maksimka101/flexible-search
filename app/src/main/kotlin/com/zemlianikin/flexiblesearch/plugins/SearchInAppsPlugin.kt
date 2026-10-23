@@ -18,6 +18,8 @@ import com.zemlianikin.flexiblesearch.core.PluginScope
  */
 class SearchInAppsPlugin : Plugin {
     override val id = "search-in-apps"
+    override val name = "Search in apps"
+    override val description = "Send the query to web search, Maps or Play"
 
     private class Target(
         val label: String,

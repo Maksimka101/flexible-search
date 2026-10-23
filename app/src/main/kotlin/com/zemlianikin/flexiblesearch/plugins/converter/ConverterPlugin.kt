@@ -4,14 +4,15 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Build
 import android.widget.Toast
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -43,10 +44,11 @@ import com.zemlianikin.flexiblesearch.plugins.converter.rates.httpGet
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.CalculatorState
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.ConverterKeys
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.ConverterResults
-import com.zemlianikin.flexiblesearch.plugins.converter.ui.ExpressionField
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.KeyboardLayout
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.ValueFormatter
+import com.zemlianikin.flexiblesearch.plugins.converter.ui.WithoutSystemKeyboard
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.conversions
+import com.zemlianikin.flexiblesearch.plugins.converter.ui.insets
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.keyboardLayout
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.rememberCalculatorState
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.underlineError
@@ -62,6 +64,9 @@ import kotlin.time.Clock
  */
 class ConverterPlugin : Plugin {
     override val id = "converter"
+    override val name = "Calculator & converter"
+    override val description =
+        "2+2 and 10 usd to eur as you type, ca for the numpad"
 
     override fun install(scope: PluginScope) {
         val repository =
@@ -138,40 +143,50 @@ class ConverterPlugin : Plugin {
             state.onEdit = { actions.setQuery(trigger.command(it)) }
             if (active) state.sync(query.text)
             val screen = ConverterScreen(state, keyboard)
-            CompositionLocalProvider(LocalConverter provides screen) {
-                if (!active) {
-                    original(props, style)
-                    return@CompositionLocalProvider
+            val keys: @Composable () -> Unit = {
+                Column {
+                    props.quickActions()
+                    ConverterKeys(
+                        state,
+                        keyboard,
+                        format,
+                        visible = active,
+                        spacing = style.spacing,
+                    ) {
+                        // ⌫ на пустом вводе убирает префикс, как на
+                        // клавиатуре.
+                        if (state.input.text.isEmpty()) {
+                            actions.setQuery("")
+                        } else {
+                            state.backspace()
+                        }
+                    }
                 }
+            }
+            CompositionLocalProvider(LocalConverter provides screen) {
                 original(
                     SearchLayoutProps(
                         searchBar = props.searchBar,
-                        loading = {},
-                        results = {
-                            ConverterResults(state, ratesState, format)
-                        },
-                        widgets = {},
-                        showWidgets = false,
-                        quickActions = {
-                            Column(
-                                verticalArrangement =
-                                    Arrangement.spacedBy(style.spacing)
-                            ) {
-                                props.quickActions()
-                                ConverterKeys(state, keyboard, format) {
-                                    // ⌫ на пустом вводе убирает префикс,
-                                    // как на клавиатуре.
-                                    if (state.input.text.isEmpty()) {
-                                        actions.setQuery("")
-                                    } else {
-                                        state.backspace()
-                                    }
+                        loading = if (active) ({}) else props.loading,
+                        results =
+                            if (active) {
+                                {
+                                    ConverterResults(
+                                        state,
+                                        ratesState,
+                                        format,
+                                    )
                                 }
-                            }
-                        },
+                            } else {
+                                props.results
+                            },
+                        quickActions = keys,
                         onDismiss = props.onDismiss,
                     ),
-                    style,
+                    style.copy(
+                        keyboardInsets =
+                            keyboard.insets(active, style.keyboardInsets)
+                    ),
                 )
             }
         }
@@ -190,23 +205,24 @@ class ConverterPlugin : Plugin {
             }
             val state = screen.state
             val numpad = screen.keyboard.numpad
-            ExpressionField(
-                value = state.input,
-                onValueChange = state::edit,
-                visualTransformation =
-                    underlineError(
-                        state.result,
-                        MaterialTheme.colorScheme.error,
-                    ),
-                onClear = state::clear,
-                numpad = numpad,
-                onToggleMode = screen.keyboard.toggle,
-                focusRequester = focus,
-                trigger = trigger,
-                onExitTrigger = props.onExitTrigger,
-                placeholder = props.placeholder ?: style.placeholder,
-                style = style,
-            )
+            val error = MaterialTheme.colorScheme.error
+            // Строка та же, но текст с курсором — у состояния конвертера:
+            // numpad набирает в позицию курсора. Сессия ввода живёт, пока
+            // поле в композиции, поэтому при смене режима поле
+            // пересоздаётся.
+            key(numpad) {
+                WithoutSystemKeyboard(numpad) {
+                    original(
+                        props.copy(
+                            value = state.input,
+                            onValueChange = state::edit,
+                            visualTransformation =
+                                underlineError(state.result, error),
+                        ),
+                        style,
+                    )
+                }
+            }
             val systemKeyboard = LocalSoftwareKeyboardController.current
             LaunchedEffect(numpad) {
                 // Поле пересоздаётся при смене режима.

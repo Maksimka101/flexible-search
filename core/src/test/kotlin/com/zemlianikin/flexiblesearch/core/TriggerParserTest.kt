@@ -2,12 +2,13 @@ package com.zemlianikin.flexiblesearch.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class TriggerParserTest {
     private val calc =
         Trigger("calc", "Calculator", listOf("calc", "="), null)
     private val maps = Trigger("maps", "Maps", listOf("maps"), null)
-    private val parser = TriggerParser(listOf(calc, maps))
+    private val parser = TriggerParser(MutableStateFlow(listOf(calc, maps)))
 
     @Test
     fun wordPrefixNeedsSpace() {
@@ -35,7 +36,7 @@ class TriggerParserTest {
     @Test
     fun firstRegisteredWinsOnConflict() {
         val other = Trigger("other", "Other", listOf("calc"), null)
-        val parser = TriggerParser(listOf(calc, other))
+        val parser = TriggerParser(MutableStateFlow(listOf(calc, other)))
         assertEquals(calc, parser.parse("calc 1").trigger)
     }
 }

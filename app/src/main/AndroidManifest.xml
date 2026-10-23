@@ -25,10 +25,18 @@
         <activity
             android:name=".SearchActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- SearchLinks. singleTask: ссылка приходит в уже открытый
+                 поиск через onNewIntent, а не открывает второй. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="flexiblesearch" />
             </intent-filter>
         </activity>
     </application>

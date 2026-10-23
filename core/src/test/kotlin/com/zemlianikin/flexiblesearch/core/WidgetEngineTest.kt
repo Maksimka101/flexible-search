@@ -4,12 +4,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 
 class WidgetEngineTest {
@@ -19,11 +23,15 @@ class WidgetEngineTest {
         vararg widgets: Pair<String, () -> Flow<List<ResultItem>>>
     ) =
         WidgetEngine(
-            widgets.map { (id, provide) ->
-                RegisteredWidget(id, null, null, provide)
-            },
+            flowOf(
+                widgets.map { (id, provide) ->
+                    RegisteredWidget(id, null, null, provide)
+                }
+            ),
             dispatcher = StandardTestDispatcher(testScheduler),
         )
+
+    private fun WidgetEngine.groups() = state().map { it.groups }
 
     private fun List<ResultGroup>.ids() = map { it.pluginId }
 
@@ -83,5 +91,55 @@ class WidgetEngineTest {
         val groups =
             engine("broken" to broken, "fine" to fine).groups().last()
         assertEquals(listOf("fine"), groups.ids())
+    }
+
+    @Test
+    fun errorHidesOnlyThatWidget() = runTest {
+        val todo = { flow<List<ResultItem>> { TODO() } }
+        val fine = { flowOf(listOf(card("toggles"))) }
+        val groups = engine("todo" to todo, "fine" to fine).groups().last()
+        assertEquals(listOf("fine"), groups.ids())
+    }
+
+    @Test
+    fun lateWidgetIsCollected() = runTest {
+        fun widget(id: String) =
+            RegisteredWidget(id, null, null) { flowOf(listOf(card(id))) }
+        val widgets = MutableStateFlow(listOf(widget("early")))
+        val updates = mutableListOf<List<ResultGroup>>()
+        backgroundScope.launch {
+            WidgetEngine(
+                    widgets,
+                    dispatcher = StandardTestDispatcher(testScheduler),
+                )
+                .groups()
+                .collect { updates += it }
+        }
+        runCurrent()
+        assertEquals(listOf("early"), updates.last().ids())
+        widgets.value += widget("late")
+        runCurrent()
+        assertEquals(listOf("early", "late"), updates.last().ids())
+    }
+
+    @Test
+    fun reopenedWindowKeepsPreviousAnswer() = runTest {
+        var weather = "sunny"
+        val slow = {
+            flow {
+                delay(100)
+                emit(listOf(card(weather)))
+            }
+        }
+        val engine = engine("weather" to slow)
+        engine.state().last()
+        weather = "rain"
+        val updates = engine.state().toList()
+        assertEquals(
+            listOf("sunny" to true, "rain" to false),
+            updates.map {
+                it.groups.single().items.single().id to it.loading
+            },
+        )
     }
 }

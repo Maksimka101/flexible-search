@@ -5,12 +5,13 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -26,8 +27,11 @@ interface SearchWindow {
     fun close()
 }
 
-/** То, что доступно действию результата или кнопки при нажатии. */
-interface ActionScope : SearchWindow {
+/**
+ * То, что доступно действию результата или кнопки при нажатии; экраны
+ * плагинов — [open].
+ */
+interface ActionScope : SearchWindow, Navigator {
     val query: SearchQuery
 
     /**
@@ -68,7 +72,8 @@ sealed interface ResultItem {
     class App(
         override val id: String,
         val label: String,
-        val icon: ImageBitmap?,
+        /** Как [Row.thumbnail]: грузится, когда плитка видна. */
+        val icon: ThumbnailLoader?,
         override val action: Action,
     ) : ResultItem
 
@@ -104,13 +109,18 @@ sealed interface ResultItem {
     }
 }
 
+/**
+ * `id` обязателен: результаты с одинаковым id в группе склеиваются, по нему
+ * же кэшируется превью. Название не годится — `report.pdf` бывает в разных
+ * папках.
+ */
 class ResultsBuilder {
     internal val items = mutableListOf<ResultItem>()
 
     fun card(
         title: String,
         subtitle: String? = null,
-        id: String = title,
+        id: String,
         action: Action,
     ) {
         items += ResultItem.Card(id, title, subtitle, action)
@@ -118,8 +128,8 @@ class ResultsBuilder {
 
     fun app(
         label: String,
-        icon: ImageBitmap?,
-        id: String = label,
+        icon: ThumbnailLoader?,
+        id: String,
         action: Action,
     ) {
         items += ResultItem.App(id, label, icon, action)
@@ -131,7 +141,7 @@ class ResultsBuilder {
         titleHighlights: List<Int> = emptyList(),
         icon: ActionIcon? = null,
         thumbnail: ThumbnailLoader? = null,
-        id: String = title,
+        id: String,
         action: Action,
     ) {
         items +=
@@ -149,7 +159,7 @@ class ResultsBuilder {
     fun suggestion(
         text: String,
         highlights: List<Int> = emptyList(),
-        id: String = text,
+        id: String,
         action: Action,
     ) {
         items += ResultItem.Suggestion(id, text, highlights, action)
@@ -257,14 +267,16 @@ class SearchState(
  * не держал главный поток. Группы идут в порядке регистрации провайдеров,
  * независимо от того, кто ответил раньше: раскладка не меняется от запроса
  * к запросу. Провайдер, превысивший [providerTimeLimitMs] или упавший,
- * останавливается, его последний список остаётся.
+ * останавливается, его последний список остаётся. Новый провайдер из
+ * [providers] сразу получает текущий запрос.
  *
  * Загрузка (`loading`) — только до первого ответа каждого провайдера.
  * Дальнейшие `emit` приходят без неё: пока поток провайдера не завершился,
  * загрузку показывает его группа ([ResultGroup.loading]), а не весь поиск.
  */
 class SearchEngine(
-    private val providers: List<RegisteredProvider>,
+    /** Растёт, если плагин регистрирует провайдер после install. */
+    private val providers: Flow<List<RegisteredProvider>>,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** Читается на каждый запрос: плагин может поменять его на ходу. */
     private val providerTimeLimitMs: () -> Long = {
@@ -278,8 +290,9 @@ class SearchEngine(
     fun results(queries: Flow<SearchQuery>): Flow<SearchState> =
         channelFlow {
             var last = SearchState.Empty
-            queries.collectLatest { query ->
-                search(query, last.groups).collect {
+            combine(queries, providers, ::Pair).collectLatest {
+                (query, providers) ->
+                search(query, providers, last.groups).collect {
                     last = it
                     send(it)
                 }
@@ -292,6 +305,7 @@ class SearchEngine(
      */
     private fun search(
         query: SearchQuery,
+        providers: List<RegisteredProvider>,
         previous: List<ResultGroup>,
     ): Flow<SearchState> {
         val selected =
@@ -351,9 +365,11 @@ class SearchEngine(
                                 }
                             }
                         } ?: Log.w(TAG, "$pluginId: time limit for $query")
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
+                        // Отменили нас — дальше. Чужая отмена, например
+                        // `withTimeout` внутри плагина, и Error — падение
+                        // провайдера, а не всего поиска.
+                        ensureActive()
                         Log.e(TAG, "$pluginId failed for $query", e)
                     }
                     // Закончил, даже не ответив: ждать больше нечего.

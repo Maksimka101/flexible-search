@@ -42,6 +42,9 @@ import kotlinx.coroutines.flow.map
  */
 class TogglesPlugin : Plugin {
     override val id = "toggles"
+    override val name = "Toggles"
+    override val description =
+        "Torch, timer, alarm and camera on the empty screen"
 
     override fun install(scope: PluginScope) {
         val cameras =

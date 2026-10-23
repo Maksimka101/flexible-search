@@ -214,10 +214,13 @@ internal fun ActionIconImage(
     icon: ActionIcon,
     modifier: Modifier,
     tint: Color = LocalContentColor.current,
+    contentDescription: String? = null,
 ) {
     when (icon) {
-        is ActionIcon.Bitmap -> Image(icon.image, null, modifier)
-        is ActionIcon.Vector -> Icon(icon.image, null, modifier, tint)
+        is ActionIcon.Bitmap ->
+            Image(icon.image, contentDescription, modifier)
+        is ActionIcon.Vector ->
+            Icon(icon.image, contentDescription, modifier, tint)
     }
 }
 

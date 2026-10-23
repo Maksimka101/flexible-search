@@ -14,14 +14,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,10 +39,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
-// --- Список результатов: группы снизу вверх, первая — у клавиатуры ---
+// --- Список результатов: группы снизу вверх, первая — у клавиатуры, над
+// ними — виджеты, в одной прокрутке ---
 
 class ResultsProps(
     val groups: List<ResultGroup>,
+    /**
+     * Виджеты пустой строки: над результатами, первый — ближе к ним. Цели
+     * Enter среди них нет.
+     */
+    val widgets: List<ResultGroup> = emptyList(),
     /** Индекс среди всех результатов того, что сработает по Enter. */
     val targetIndex: Int = 0,
     val onClick: (ResultItem) -> Unit,
@@ -59,17 +71,23 @@ data class ResultsStyle(
  */
 const val ResultAnimationStiffness = Spring.StiffnessMediumLow * 2.25f
 
+/** Выключена, пока окно открывается: первый кадр — без появления. */
+internal val LocalItemAnimation = compositionLocalOf { true }
+
 /** `animateItem` с одной жёсткостью для появления, сдвига и исчезания. */
+@Composable
 fun LazyItemScope.itemAnimation(stiffness: Float): Modifier =
-    Modifier.animateItem(
-        fadeInSpec = spring(stiffness = stiffness),
-        placementSpec =
-            spring(
-                stiffness = stiffness,
-                visibilityThreshold = IntOffset.VisibilityThreshold,
-            ),
-        fadeOutSpec = spring(stiffness = stiffness),
-    )
+    if (!LocalItemAnimation.current) Modifier
+    else
+        Modifier.animateItem(
+            fadeInSpec = spring(stiffness = stiffness),
+            placementSpec =
+                spring(
+                    stiffness = stiffness,
+                    visibilityThreshold = IntOffset.VisibilityThreshold,
+                ),
+            fadeOutSpec = spring(stiffness = stiffness),
+        )
 
 val Results =
     Component<ResultsProps, ResultsStyle>(
@@ -88,7 +106,13 @@ val Results =
         // группы (её префикс) — сверху вниз, иначе виден его конец.
         val reverse = props.groups.none { it.complete }
         val groups = props.groups.withSharedAppRow()
+        // Ключи групп и виджетов могут совпасть: `номер/плагин`.
+        val widgets = props.widgets.map { "widget/${it.key}" to it }
         LazyColumn(
+            state =
+                rememberStartAnchoredState(
+                    groups.map { it.key } + widgets.map { it.first }
+                ),
             reverseLayout = reverse,
             verticalArrangement =
                 Arrangement.spacedBy(
@@ -115,37 +139,7 @@ val Results =
                     )
                 }
             }
-        }
-    }
-
-// --- Виджеты пустой строки: снизу вверх, первый — у клавиатуры ---
-
-class WidgetAreaProps(
-    val widgets: List<ResultGroup>,
-    val onClick: (ResultItem) -> Unit,
-    val onFill: (String) -> Unit,
-)
-
-data class WidgetAreaStyle(val spacing: Dp, val animationStiffness: Float)
-
-/** Список; pager или сетку можно сделать плагином через `override`. */
-val WidgetArea =
-    Component<WidgetAreaProps, WidgetAreaStyle>(
-        name = "WidgetArea",
-        defaultStyle = {
-            WidgetAreaStyle(
-                spacing = 8.dp,
-                animationStiffness = ResultAnimationStiffness,
-            )
-        },
-    ) { props, style ->
-        LazyColumn(
-            reverseLayout = true,
-            verticalArrangement =
-                Arrangement.spacedBy(style.spacing, Alignment.Bottom),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            items(props.widgets, key = { it.key }) { widget ->
+            items(widgets, key = { it.first }) { (_, widget) ->
                 Box(itemAnimation(style.animationStiffness)) {
                     ResultSection(
                         ResultSectionProps(
@@ -161,6 +155,26 @@ val WidgetArea =
             }
         }
     }
+
+/**
+ * Позиция списка, которая при смене набора групп снова в начале. Сам
+ * LazyColumn держит на месте первую видимую группу по ключу: группа,
+ * вернувшаяся в начало, — к клавиатуре, — встала бы за краем, и список
+ * оказался бы прокручен.
+ */
+@Composable
+private fun rememberStartAnchoredState(keys: List<String>): LazyListState {
+    val state = rememberLazyListState()
+    val last = remember { mutableListOf(keys) }
+    // До раскладки этого же кадра: новые группы сразу на месте.
+    SideEffect {
+        if (last[0] != keys) {
+            last[0] = keys
+            state.requestScrollToItem(0)
+        }
+    }
+    return state
+}
 
 class ResultSectionProps(
     val group: ResultGroup,

@@ -37,6 +37,8 @@ dependencies {
     api(libs.serialization.json)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
+    // Плагины видят свои Screen и open(), а не навигацию.
+    implementation(libs.navigation3.ui)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.coroutines.test)
 }

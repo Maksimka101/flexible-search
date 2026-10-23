@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,10 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,7 +43,8 @@ class AppRowProps(
 data class AppRowStyle(
     val containerColor: Color,
     val shape: Shape,
-    val maxApps: Int,
+    /** Сколько плиток видно сразу; остальные — прокруткой ряда. */
+    val visibleApps: Int,
     /** Жёсткость пружины, с которой иконки едут и проявляются. */
     val animationStiffness: Float,
 )
@@ -52,7 +56,7 @@ val AppRow =
             AppRowStyle(
                 MaterialTheme.colorScheme.surfaceContainer,
                 RoundedCornerShape(24.dp),
-                maxApps = 5,
+                visibleApps = 6,
                 animationStiffness = ResultAnimationStiffness,
             )
         },
@@ -62,23 +66,27 @@ val AppRow =
             shape = style.shape,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            val apps = keyedApps(props.apps)
+            val state = rememberLazyListState()
+            // Новые результаты — ряд снова с начала, где цель Enter.
+            LaunchedEffect(apps.map { it.first }) { state.scrollToItem(0) }
             // Ленивый ряд ради `animateItem`: иконка, оставшаяся в
             // результатах, едет на новое место, а не перескакивает.
             LazyRow(
-                userScrollEnabled = false,
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                state = state,
+                contentPadding = PaddingValues(8.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                items(
-                    keyedApps(props.apps.take(style.maxApps)),
-                    key = { it.first },
-                ) { (_, app) ->
+                items(apps, key = { it.first }) { (_, app) ->
                     AppIcon(
                         AppIconProps(
                             app,
                             app == props.target,
                             // Ширина места фиксирована: при 1–4 результатах
                             // иконки не растягиваются.
-                            Modifier.fillParentMaxWidth(1f / style.maxApps)
+                            Modifier.fillParentMaxWidth(
+                                    1f / style.visibleApps
+                                )
                                 .then(
                                     itemAnimation(style.animationStiffness)
                                 ),
@@ -127,10 +135,10 @@ val AppIcon =
         defaultStyle = {
             val colors = MaterialTheme.colorScheme
             AppIconStyle(
-                iconSize = 48.dp,
+                iconSize = 40.dp,
                 highlightColor = colors.secondaryContainer,
                 highlightShape = RoundedCornerShape(16.dp),
-                labelStyle = MaterialTheme.typography.labelMedium,
+                labelStyle = MaterialTheme.typography.labelSmall,
                 labelColor = colors.onSurface,
             )
         },
@@ -146,9 +154,12 @@ val AppIcon =
                         style.highlightShape,
                     )
                     .clickable(onClick = props.onClick)
-                    .padding(vertical = 8.dp, horizontal = 2.dp),
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
         ) {
-            val icon = props.app.icon
+            // Ключ без плагина: `id` плиток в общем ряду и так почти
+            // всегда уникален, а совпадут — значок мелькнёт чужой.
+            val icon =
+                rememberThumbnail("app/${props.app.id}", props.app.icon)
             if (icon != null) {
                 Image(
                     icon,
@@ -158,7 +169,7 @@ val AppIcon =
             } else {
                 Spacer(Modifier.size(style.iconSize))
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 props.app.label,
                 style = style.labelStyle,

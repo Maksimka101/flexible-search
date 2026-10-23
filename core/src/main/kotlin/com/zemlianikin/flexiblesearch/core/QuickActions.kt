@@ -38,7 +38,7 @@ fun materialIcon(name: String, pathData: String): ImageVector =
         .addPath(addPathNodes(pathData), fill = SolidColor(Color.Black))
         .build()
 
-/** Кнопка в ряду под результатами, видна всегда. */
+/** Кнопка в ряду под результатами или в строке поиска, видна всегда. */
 class QuickAction(
     val id: String,
     val label: String,
@@ -101,9 +101,10 @@ val QuickActionButton =
         defaultStyle = {
             val colors = MaterialTheme.colorScheme
             QuickActionButtonStyle(
-                size = 52.dp,
+                size = 44.dp,
                 iconSize = 28.dp,
-                containerColor = colors.surfaceContainer,
+                // Без подложки; выбранная — с ней.
+                containerColor = Color.Transparent,
                 selectedColor = colors.primaryContainer,
                 contentColor = colors.onSurface,
                 shape = CircleShape,

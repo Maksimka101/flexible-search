@@ -10,6 +10,8 @@ import com.zemlianikin.flexiblesearch.core.PluginScope
  */
 class MocksPlugin : Plugin {
     override val id = "mocks"
+    override val name = "Mocks"
+    override val description = "Fake web suggestions, files and weather"
 
     override fun install(scope: PluginScope) {
         WebSuggestionsMock.install(scope)

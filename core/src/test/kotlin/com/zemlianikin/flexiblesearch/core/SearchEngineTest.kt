@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 
 class SearchEngineTest {
     private fun card(id: String) = ResultItem.Card(id, id, null) {}
@@ -27,9 +28,11 @@ class SearchEngineTest {
         vararg providers: Pair<String, ResultProvider>
     ) =
         SearchEngine(
-            providers.map { (id, provide) ->
-                RegisteredProvider(id, null, null, null, provide)
-            },
+            flowOf(
+                providers.map { (id, provide) ->
+                    RegisteredProvider(id, null, null, null, provide)
+                }
+            ),
             dispatcher = StandardTestDispatcher(testScheduler),
             providerTimeLimitMs = { 1_000 },
         )
@@ -79,10 +82,12 @@ class SearchEngineTest {
             )
         val engine =
             SearchEngine(
-                listOf(
-                    provider("recent", onEmpty = true),
-                    provider("files"),
-                    provider("history", calc, onEmpty = true),
+                flowOf(
+                    listOf(
+                        provider("recent", onEmpty = true),
+                        provider("files"),
+                        provider("history", calc, onEmpty = true),
+                    )
                 ),
                 dispatcher = StandardTestDispatcher(testScheduler),
             )
@@ -98,21 +103,23 @@ class SearchEngineTest {
         val provider: ResultProvider = { flowOf(results("a")) }
         val engine =
             SearchEngine(
-                listOf(
-                    RegisteredProvider(
-                        "files",
-                        null,
-                        "Files",
-                        files,
-                        provider,
-                    ),
-                    RegisteredProvider(
-                        "files",
-                        files,
-                        "Files",
-                        null,
-                        provider,
-                    ),
+                flowOf(
+                    listOf(
+                        RegisteredProvider(
+                            "files",
+                            null,
+                            "Files",
+                            files,
+                            provider,
+                        ),
+                        RegisteredProvider(
+                            "files",
+                            files,
+                            "Files",
+                            null,
+                            provider,
+                        ),
+                    )
                 ),
                 dispatcher = StandardTestDispatcher(testScheduler),
             )
@@ -202,7 +209,11 @@ class SearchEngineTest {
         }
         val engine =
             SearchEngine(
-                listOf(RegisteredProvider("slow", null, null, null, slow)),
+                flowOf(
+                    listOf(
+                        RegisteredProvider("slow", null, null, null, slow)
+                    )
+                ),
                 dispatcher = StandardTestDispatcher(testScheduler),
                 providerTimeLimitMs = { limitMs },
             )
@@ -324,9 +335,23 @@ class SearchEngineTest {
         val triggered: ResultProvider = { flowOf(results("calc:$it")) }
         val engine =
             SearchEngine(
-                listOf(
-                    RegisteredProvider("global", null, null, null, global),
-                    RegisteredProvider("calc", calc, null, null, triggered),
+                flowOf(
+                    listOf(
+                        RegisteredProvider(
+                            "global",
+                            null,
+                            null,
+                            null,
+                            global,
+                        ),
+                        RegisteredProvider(
+                            "calc",
+                            calc,
+                            null,
+                            null,
+                            triggered,
+                        ),
+                    )
                 ),
                 dispatcher = StandardTestDispatcher(testScheduler),
             )
@@ -336,5 +361,48 @@ class SearchEngineTest {
         assertEquals(listOf("calc:2"), ids(SearchQuery("2", calc)))
         assertEquals(listOf("global:2"), ids(SearchQuery("2")))
         assertEquals(emptyList(), ids(SearchQuery(" ")))
+    }
+
+    @Test
+    fun foreignCancellationAndErrorsFailOnlyTheProvider() = runTest {
+        val ownTimeout: ResultProvider = {
+            flow { withTimeout(100) { awaitCancellation() } }
+        }
+        val todo: ResultProvider = { flow { TODO() } }
+        val fine: ResultProvider = { flowOf(results("fine")) }
+        val state =
+            engine("timeout" to ownTimeout, "todo" to todo, "fine" to fine)
+                .results(flowOf(SearchQuery("q")))
+                .final()
+        assertEquals(listOf("fine"), state.ids())
+        assertFalse(state.loading)
+        assertTrue(state.groups.none { it.loading })
+    }
+
+    @Test
+    fun lateProviderGetsCurrentQuery() = runTest {
+        fun provider(id: String) =
+            RegisteredProvider(
+                id,
+                null,
+                null,
+                null,
+                { query -> flowOf(results("$id:$query")) },
+            )
+        val providers = MutableStateFlow(listOf(provider("early")))
+        val states = mutableListOf<SearchState>()
+        backgroundScope.launch {
+            SearchEngine(
+                    providers,
+                    dispatcher = StandardTestDispatcher(testScheduler),
+                )
+                .results(flowOf(SearchQuery("q")))
+                .collect { states += it }
+        }
+        runCurrent()
+        assertEquals(listOf("early:q"), states.last().ids())
+        providers.value += provider("late")
+        runCurrent()
+        assertEquals(listOf("early:q", "late:q"), states.last().ids())
     }
 }

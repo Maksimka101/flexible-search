@@ -1,0 +1,5 @@
+<resources>
+    <color name="search_widget_background">#8C1B1F27</color>
+    <color name="search_widget_field">#D11B1F27</color>
+    <color name="search_widget_icon">#FFDCE2EC</color>
+</resources>

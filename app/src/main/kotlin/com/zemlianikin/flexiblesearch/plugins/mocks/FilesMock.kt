@@ -131,7 +131,7 @@ internal object FilesMock {
             subtitle = "$size · $modified · ${file.folder}",
             titleHighlights = highlights,
             thumbnail = { thumbnail(file) },
-            id = file.name,
+            id = "${file.folder}/${file.name}",
         ) {
             Toast.makeText(
                     context,

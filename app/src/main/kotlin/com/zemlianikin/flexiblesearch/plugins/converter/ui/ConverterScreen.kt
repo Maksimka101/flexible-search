@@ -1,23 +1,21 @@
 package com.zemlianikin.flexiblesearch.plugins.converter.ui
 
 import android.content.ClipData
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +33,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.zemlianikin.flexiblesearch.plugins.converter.calc.CalcError
 import com.zemlianikin.flexiblesearch.plugins.converter.calc.Calculation
@@ -92,16 +93,18 @@ fun ConverterResults(
 }
 
 /**
- * Ряд над клавиатурой меняется вместе с режимом: чипы валют выезжают снизу,
- * от numpad, а ряд операторов уходит вверх; обратно — наоборот. Ряды одной
- * высоты, поэтому всё над ними стоит на месте. В numpad под рядом — сам
- * numpad высотой системной клавиатуры.
+ * Ряд над клавиатурой с переключателем режима: в numpad — чипы валют и под
+ * ним сам numpad высотой системной клавиатуры; с клавиатурой — ряд
+ * операторов. Режимы сменяются без анимации. [visible] — конвертер открыт,
+ * [spacing] — отступ ряда от того, что над ним.
  */
 @Composable
 fun ConverterKeys(
     state: CalculatorState,
     keyboard: KeyboardLayout,
     format: ValueFormatter,
+    visible: Boolean,
+    spacing: Dp,
     onBackspace: () -> Unit,
 ) {
     // Кнопка «+» рядом с чипами: валюта по названию или стране
@@ -119,50 +122,68 @@ fun ConverterKeys(
             onDismiss = { picking = false },
         )
     }
-    Column {
-        AnimatedContent(
-            targetState = keyboard.numpad,
-            transitionSpec = {
-                val from = if (targetState) 1 else -1
-                (slideInVertically(Motion.spatial()) { it * from } +
-                        fadeIn(Motion.effects()))
-                    .togetherWith(
-                        slideOutVertically(Motion.spatial()) {
-                            -it * from
-                        } + fadeOut(Motion.effects())
-                    )
-            },
-            label = "keyRow",
-        ) { numpad ->
-            if (numpad) {
-                // Ряд валют не прыгает: остаются все чипы топа,
-                // неподходящие к месту курсора неактивны.
-                val ranking = state.ranking
-                val suggestions = state.suggestions
-                val chips =
-                    remember(ranking, suggestions) {
-                        (ranking.take(CHIP_LIMIT) + suggestions.codes)
-                            .distinct()
-                    }
-                CurrencyChips(
-                    chips,
-                    enabled = suggestions.codes.toSet(),
-                    onPick = state::pickSuggestion,
-                    onAdd = { picking = true },
-                )
-            } else {
-                OperatorKeys(onKey = state::type)
-            }
+    if (!visible) return
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(top = spacing).height(KEY_ROW_HEIGHT),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ModeToggle(keyboard.numpad, keyboard.toggle)
+            Spacer(Modifier.width(8.dp))
+            KeyRow(state, keyboard.numpad, onAdd = { picking = true })
         }
         if (keyboard.numpad) {
             Numpad(
                 onKey = state::type,
                 onBackspace = onBackspace,
                 decimal = format.decimalSeparator,
-                height = keyboard.numpadHeight,
+                height = keyboard.space,
             )
         }
-        Spacer(Modifier.height(keyboard.reserve))
+    }
+}
+
+/** Numpad или системная клавиатура: `ABC` / `123`, как было в поле. */
+@Composable
+private fun ModeToggle(numpad: Boolean, onToggle: () -> Unit) {
+    val label = if (numpad) "Text keyboard" else "Numpad"
+    FilledTonalIconButton(
+        onClick = onToggle,
+        modifier = Modifier.semantics { contentDescription = label },
+    ) {
+        Text(
+            if (numpad) "ABC" else "123",
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
+}
+
+@Composable
+private fun RowScope.KeyRow(
+    state: CalculatorState,
+    numpad: Boolean,
+    onAdd: () -> Unit,
+) {
+    Box(Modifier.weight(1f)) {
+        if (numpad) {
+            // Ряд валют не прыгает: остаются все чипы топа,
+            // неподходящие к месту курсора неактивны.
+            val ranking = state.ranking
+            val suggestions = state.suggestions
+            val chips =
+                remember(ranking, suggestions) {
+                    (ranking.take(CHIP_LIMIT) + suggestions.codes)
+                        .distinct()
+                }
+            CurrencyChips(
+                chips,
+                enabled = suggestions.codes.toSet(),
+                onPick = state::pickSuggestion,
+                onAdd = onAdd,
+            )
+        } else {
+            OperatorKeys(onKey = state::type)
+        }
     }
 }
 

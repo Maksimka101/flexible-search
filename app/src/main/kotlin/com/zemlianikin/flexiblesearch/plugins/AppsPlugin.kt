@@ -18,51 +18,155 @@ import androidx.core.graphics.drawable.toBitmap
 import com.zemlianikin.flexiblesearch.core.NameMatcher
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
+import com.zemlianikin.flexiblesearch.core.ResultItem
+import com.zemlianikin.flexiblesearch.core.buildResults
+import java.text.Collator
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 
 /**
  * Приложения из лаунчера, включая рабочий профиль. Запуск закрывает поиск.
- * На пустой строке — недавно запущенные отсюда. Находит и по названию на
- * другом языке: `настройки` — Settings.
+ * На пустой строке — недавно запущенные отсюда, а пока их меньше
+ * [RecentApps.LIMIT] — все: недавние первыми, дальше по алфавиту. Находит и
+ * по названию на другом языке: `настройки` — Settings.
  */
 class AppsPlugin : Plugin {
     override val id = "apps"
+    override val name = "Apps"
+    override val description = "Installed apps, also by translated name"
 
     override fun install(scope: PluginScope) {
-        val index = AppIndex(scope.context)
+        val index =
+            AppIndex(scope.context, LabelCache(scope.prefs, scope.json))
         val recent = RecentApps(scope.prefs)
-        scope.results(onEmpty = true) { query ->
+
+        suspend fun results(
+            list: AppList,
+            query: String,
+        ): List<ResultItem> {
             val apps =
-                if (query.isBlank()) index.find(recent.keys())
-                else index.search(query, limit = RecentApps.LIMIT)
-            for (app in apps) {
-                app(app.label, index.icon(app), id = app.key) {
-                    recent.add(app.key)
-                    index.launch(app)
-                    close()
+                if (query.isNotBlank()) list.search(query)
+                else {
+                    val recentApps = list.find(recent.keys())
+                    if (recentApps.size >= RecentApps.LIMIT) recentApps
+                    else recentApps + (list.sorted() - recentApps.toSet())
+                }
+            return buildResults {
+                for (app in apps) {
+                    app(app.label, { index.icon(app) }, id = app.key) {
+                        recent.add(app.key)
+                        index.launch(app)
+                        close()
+                    }
                 }
             }
         }
+
+        // Список перечитывается при каждом открытии: ничего не пропустит,
+        // даже если система не сообщила об изменении.
+        scope.onOpen { index.reload(ifIdle = true) }
+        scope.resultsFlow(onEmpty = true) { query ->
+            flow {
+                // Сразу — прежний список, потом — перечитанный, если он
+                // ещё читается.
+                val cached = index.cached
+                if (cached != null) emit(results(cached, query))
+                val fresh = index.fresh()
+                if (fresh !== cached) emit(results(fresh, query))
+            }
+        }
+    }
+}
+
+/** Снимок установленных; переводы названий догружаются в фоне. */
+private class AppList(val apps: List<InstalledApp>, val translated: Job) {
+    suspend fun search(query: String): List<InstalledApp> {
+        // Ждёт только запрос, набранный раньше, чем готовы переводы.
+        translated.join()
+        return NameMatcher.rankByNames(query, apps) {
+                listOf(it.label) + it.translations
+            }
+            .map { it.value }
+    }
+
+    /** Удалённые пропускаются. */
+    fun find(keys: List<String>): List<InstalledApp> {
+        val byKey = apps.associateBy { it.key }
+        return keys.mapNotNull { byKey[it] }
+    }
+
+    /** Все по названию, без учёта регистра и с языком системы. */
+    fun sorted(): List<InstalledApp> {
+        val collator = Collator.getInstance()
+        return apps.sortedWith(compareBy(collator) { it.label })
     }
 }
 
 private class InstalledApp(
     val label: String,
     val info: LauncherActivityInfo,
+    /** Версия названий: APK и языки системы, см. [LabelCache]. */
+    val stamp: String,
 ) {
-    val key = "${info.componentName.flattenToShortString()}@${info.user}"
+    val key = keyOf(info)
 
     /** Название на других языках, без [label]; заполняется в фоне. */
     @Volatile var translations: List<String> = emptyList()
+}
+
+private fun keyOf(info: LauncherActivityInfo) =
+    "${info.componentName.flattenToShortString()}@${info.user}"
+
+/**
+ * Названия и переводы с прошлого раза: читать их из ресурсов каждого
+ * приложения на холодном старте — сотни миллисекунд. Запись верна, пока тот
+ * же APK (при обновлении путь меняется) и те же языки системы.
+ */
+private class LabelCache(
+    private val prefs: SharedPreferences,
+    private val json: Json,
+) {
+    @Serializable
+    class Entry(
+        val stamp: String,
+        val label: String,
+        val translations: List<String>,
+    )
+
+    fun load(): Map<String, Entry> =
+        try {
+            prefs
+                .getString(KEY, null)
+                ?.let { json.decodeFromString<Map<String, Entry>>(it) }
+                .orEmpty()
+        } catch (e: SerializationException) {
+            emptyMap()
+        }
+
+    fun save(apps: List<InstalledApp>) {
+        val entries = apps.associate {
+            it.key to Entry(it.stamp, it.label, it.translations)
+        }
+        prefs.edit { putString(KEY, json.encodeToString(entries)) }
+    }
+
+    private companion object {
+        const val KEY = "labels"
+    }
 }
 
 /** Последние запущенные, новые первыми. */
@@ -76,13 +180,16 @@ private class RecentApps(private val prefs: SharedPreferences) {
     }
 
     companion object {
-        /** Сколько плиток в ряду приложений. */
+        /** Хранится недавних; столько же — полная строка плиток. */
         const val LIMIT = 5
         private const val KEY = "recent"
     }
 }
 
-private class AppIndex(private val context: Context) {
+private class AppIndex(
+    private val context: Context,
+    private val labels: LabelCache,
+) {
     private val launcherApps =
         context.getSystemService(LauncherApps::class.java)
     private val iconSize =
@@ -92,12 +199,16 @@ private class AppIndex(private val context: Context) {
     private val background =
         CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    @Volatile private var apps: List<InstalledApp>? = null
-    @Volatile private var translating: Job? = null
+    /** Последний прочитанный список; null — ещё ни одного. */
+    @Volatile
+    var cached: AppList? = null
+        private set
+
+    @Volatile private var loading: Deferred<AppList>? = null
 
     init {
         // Установили, удалили или обновили приложение — перечитать список
-        // при следующем запросе.
+        // и значки.
         launcherApps.registerCallback(
             object : LauncherApps.Callback() {
                 override fun onPackageAdded(
@@ -131,27 +242,23 @@ private class AppIndex(private val context: Context) {
     }
 
     private fun invalidate() {
-        apps = null
         icons.clear()
+        reload()
     }
 
-    suspend fun search(query: String, limit: Int): List<InstalledApp> {
-        val apps = all()
-        // Переводы начинают грузиться при открытии окна; ждёт только
-        // первый запрос, если набран раньше, чем они готовы.
-        translating?.join()
-        return NameMatcher.rankByNames(query, apps) {
-                listOf(it.label) + it.translations
-            }
-            .take(limit)
-            .map { it.value }
-    }
+    /**
+     * Перечитать в фоне; пока читается, [cached] — прежний. [ifIdle] — не
+     * начинать, если уже читается: на холодном старте первый запрос
+     * опережает открытие окна.
+     */
+    fun reload(ifIdle: Boolean = false): Deferred<AppList> =
+        loading?.takeIf { ifIdle && it.isActive }
+            ?: background
+                .async { mutex.withLock { read() } }
+                .also { loading = it }
 
-    /** Удалённые пропускаются. */
-    suspend fun find(keys: List<String>): List<InstalledApp> {
-        val byKey = all().associateBy { it.key }
-        return keys.mapNotNull { byKey[it] }
-    }
+    /** Список после идущего перечитывания; не читался — прочитать. */
+    suspend fun fresh(): AppList = (loading ?: reload()).await()
 
     suspend fun icon(app: InstalledApp): ImageBitmap =
         icons[app.key]
@@ -177,30 +284,39 @@ private class AppIndex(private val context: Context) {
         }
     }
 
-    private suspend fun all(): List<InstalledApp> =
-        apps
-            ?: mutex.withLock {
-                apps
-                    ?: withContext(Dispatchers.IO) {
-                            launcherApps.profiles
-                                .flatMap { user ->
-                                    launcherApps.getActivityList(null, user)
-                                }
-                                .filter {
-                                    it.componentName.packageName !=
-                                        context.packageName
-                                }
-                                .map {
-                                    InstalledApp(it.label.toString(), it)
-                                }
+    private fun read(): AppList {
+        val saved = labels.load()
+        val locales = LocaleList.getDefault().toLanguageTags()
+        val apps =
+            launcherApps.profiles
+                .flatMap { user ->
+                    launcherApps.getActivityList(null, user)
+                }
+                .filter {
+                    it.componentName.packageName != context.packageName
+                }
+                .map { info ->
+                    val stamp = "${info.applicationInfo.sourceDir}|$locales"
+                    val entry =
+                        saved[keyOf(info)]?.takeIf { it.stamp == stamp }
+                    InstalledApp(
+                            entry?.label ?: info.label.toString(),
+                            info,
+                            stamp,
+                        )
+                        .apply {
+                            entry?.let { translations = it.translations }
                         }
-                        .also {
-                            apps = it
-                            translating = background.launch {
-                                translate(it)
-                            }
-                        }
+                }
+        val stale = apps.filter { saved[it.key]?.stamp != it.stamp }
+        val translated = background.launch {
+            translate(stale)
+            if (stale.isNotEmpty() || saved.size != apps.size) {
+                labels.save(apps)
             }
+        }
+        return AppList(apps, translated).also { cached = it }
+    }
 
     /**
      * Названия берутся из ресурсов самого приложения: языки системы плюс

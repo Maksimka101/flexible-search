@@ -1,9 +1,9 @@
 package com.zemlianikin.flexiblesearch.core
 
 import android.util.Log
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.conflate
@@ -22,22 +22,41 @@ class RegisteredWidget(
     val provide: () -> Flow<List<ResultItem>>,
 )
 
+class WidgetState(
+    /** Видимые виджеты — группы для [ResultSection]. */
+    val groups: List<ResultGroup>,
+    /** Кто-то из виджетов ещё не ответил в этом сборе. */
+    val loading: Boolean,
+)
+
 /**
  * Собирает виджеты параллельно на [dispatcher]. Порядок — порядок
  * регистрации, как у групп результатов. Лимита времени нет: таймер или
  * музыка шлют обновления, пока виджеты собирают. Упавший виджет скрывается.
  */
 class WidgetEngine(
-    private val widgets: List<RegisteredWidget>,
+    /**
+     * Только растёт: виджет, добавленный после install, сразу начинает
+     * собираться.
+     */
+    private val widgets: Flow<List<RegisteredWidget>>,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
-    /** Видимые виджеты — группы для [ResultSection]. */
-    fun groups(): Flow<List<ResultGroup>> = channelFlow {
+    /**
+     * Ответы прошлого сбора по номеру виджета: окно открыли снова — виджет
+     * показывает прежнее, пока не ответил заново, а не пропадает.
+     */
+    @Volatile private var last = emptyList<List<ResultItem>?>()
+
+    /** Сбор виджетов; каждый сбор — заново, с прошлыми ответами. */
+    fun state(): Flow<WidgetState> = channelFlow {
         val mutex = Mutex()
-        val lists = arrayOfNulls<List<ResultItem>>(widgets.size)
+        var started = emptyList<RegisteredWidget>()
+        val lists = mutableListOf<List<ResultItem>?>()
+        val answered = mutableListOf<Boolean>()
 
         suspend fun publish() {
-            val groups = widgets.mapIndexedNotNull { index, widget ->
+            val groups = started.mapIndexedNotNull { index, widget ->
                 val items = lists[index]
                 if (items.isNullOrEmpty()) return@mapIndexedNotNull null
                 ResultGroup(
@@ -50,25 +69,44 @@ class WidgetEngine(
                     complete = false,
                 )
             }
-            send(groups)
+            last = lists.toList()
+            send(WidgetState(groups, loading = !answered.all { it }))
         }
 
-        widgets.forEachIndexed { index, widget ->
-            launch(dispatcher) {
-                try {
-                    widget.provide().collect { list ->
+        widgets.collect { all ->
+            val first = mutex.withLock {
+                val first = started.size
+                if (all.size > first) {
+                    started = all
+                    repeat(all.size - first) {
+                        lists += last.getOrNull(lists.size)
+                        answered += false
+                    }
+                    if (first == 0 && lists.any { it != null }) publish()
+                }
+                first
+            }
+            for (index in first until all.size) {
+                val widget = all[index]
+                launch(dispatcher) {
+                    try {
+                        widget.provide().collect { list ->
+                            mutex.withLock {
+                                lists[index] = list
+                                answered[index] = true
+                                publish()
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        // Отменили нас — дальше; чужая отмена и Error —
+                        // падение виджета.
+                        ensureActive()
+                        Log.e(TAG, "${widget.pluginId} failed", e)
                         mutex.withLock {
-                            lists[index] = list
+                            lists[index] = null
+                            answered[index] = true
                             publish()
                         }
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "${widget.pluginId} failed", e)
-                    mutex.withLock {
-                        lists[index] = null
-                        publish()
                     }
                 }
             }
