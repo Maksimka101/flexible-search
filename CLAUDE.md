@@ -13,7 +13,8 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   `prefs` (свой SharedPreferences), `http` (общий OkHttp с кэшем), `json`
   (kotlinx.serialization).
 - `app/` — хост (`com.zemlianikin.flexiblesearch`) и встроенные плагины в `plugins/`
-  (пишутся только через `PluginScope`): поиск приложений, калькулятор (`calc `, `=`),
+  (пишутся только через `PluginScope`): поиск приложений
+  (и по переводам названий), калькулятор (`calc `, `=`),
   «искать в…», строка-«таблетка», фонарик и кнопки. `plugins/mocks/` — один
   `MocksPlugin` с моками веба, файлов и погоды.
 - `poc/<имя>` — эксперименты: отдельный модуль со своим `applicationId`, ставится
@@ -28,3 +29,5 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
 - `./gradlew :app:assembleDebug` — APK в `app/build/outputs/apk/debug/`, ставить `adbi <apk>`.
 - Скриншот: `adb -s localhost:5555 exec-out screencap -p` пишет перед PNG предупреждение про несколько
   дисплеев — данные начинаются с `\x89PNG`.
+  Без `-d` может снять чёрный неактивный дисплей: id — из
+  `adb shell dumpsys SurfaceFlinger --display-id`, `screencap -d <id> -p`.

@@ -5,7 +5,12 @@ import java.text.Normalizer
 /** Очки совпадения и позиции совпавших символов в исходном тексте. */
 class NameMatch(val score: Int, val positions: List<Int>)
 
-class Ranked<T>(val value: T, val match: NameMatch)
+class Ranked<T>(
+    val value: T,
+    val match: NameMatch,
+    /** Совпавшее имя: позиции [match] — в нём. */
+    val name: String,
+)
 
 /**
  * Поиск по названиям — приложений, файлов, контактов — так, как их
@@ -42,15 +47,33 @@ object NameMatcher {
         items: Iterable<T>,
         variants: QueryVariants = QueryVariants.Default,
         text: (T) -> String,
+    ): List<Ranked<T>> =
+        rankByNames(query, items, variants) { listOf(text(it)) }
+
+    /**
+     * Как [rank], но у элемента несколько имён, например название и его
+     * переводы; засчитывается лучшее, при равенстве — раньше в списке.
+     */
+    fun <T> rankByNames(
+        query: String,
+        items: Iterable<T>,
+        variants: QueryVariants = QueryVariants.Default,
+        names: (T) -> List<String>,
     ): List<Ranked<T>> {
         val candidates = candidates(query, variants)
         return items
             .mapNotNull { item ->
-                best(candidates, text(item))?.let { Ranked(item, it) }
+                names(item)
+                    .mapNotNull { name ->
+                        best(candidates, name)?.let {
+                            Ranked(item, it, name)
+                        }
+                    }
+                    .maxByOrNull { it.match.score }
             }
             .sortedWith(
                 compareByDescending<Ranked<T>> { it.match.score }
-                    .thenBy { text(it.value).length }
+                    .thenBy { it.name.length }
             )
     }
 

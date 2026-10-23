@@ -104,4 +104,19 @@ class NameMatcherTest {
         val swapped = NameMatcher.match("еуду", "Telegram")!!.score
         assertTrue(swapped < typed)
     }
+
+    @Test
+    fun anyOfSeveralNamesMatches() {
+        val apps =
+            mapOf(
+                "Settings" to listOf("Settings", "Настройки"),
+                "Telegram" to listOf("Telegram"),
+            )
+        val ranked =
+            NameMatcher.rankByNames("настр", apps.keys) {
+                apps.getValue(it)
+            }
+        assertEquals(listOf("Settings"), ranked.map { it.value })
+        assertEquals("Настройки", ranked.single().name)
+    }
 }

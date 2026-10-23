@@ -4,8 +4,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
+import android.content.res.Configuration
+import android.os.Build
+import android.os.LocaleList
+import android.os.SystemClock
 import android.os.UserHandle
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
@@ -13,15 +18,21 @@ import androidx.core.graphics.drawable.toBitmap
 import com.zemlianikin.flexiblesearch.core.NameMatcher
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
  * Приложения из лаунчера, включая рабочий профиль. Запуск закрывает поиск.
- * На пустой строке — недавно запущенные отсюда.
+ * На пустой строке — недавно запущенные отсюда. Находит и по названию на
+ * другом языке: `настройки` — Settings.
  */
 class AppsPlugin : Plugin {
     override val id = "apps"
@@ -49,6 +60,9 @@ private class InstalledApp(
     val info: LauncherActivityInfo,
 ) {
     val key = "${info.componentName.flattenToShortString()}@${info.user}"
+
+    /** Название на других языках, без [label]; заполняется в фоне. */
+    @Volatile var translations: List<String> = emptyList()
 }
 
 /** Последние запущенные, новые первыми. */
@@ -75,8 +89,11 @@ private class AppIndex(private val context: Context) {
         (48 * context.resources.displayMetrics.density).toInt()
     private val icons = ConcurrentHashMap<String, ImageBitmap>()
     private val mutex = Mutex()
+    private val background =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile private var apps: List<InstalledApp>? = null
+    @Volatile private var translating: Job? = null
 
     init {
         // Установили, удалили или обновили приложение — перечитать список
@@ -118,10 +135,17 @@ private class AppIndex(private val context: Context) {
         icons.clear()
     }
 
-    suspend fun search(query: String, limit: Int): List<InstalledApp> =
-        NameMatcher.rank(query, all()) { it.label }
+    suspend fun search(query: String, limit: Int): List<InstalledApp> {
+        val apps = all()
+        // Переводы начинают грузиться при открытии окна; ждёт только
+        // первый запрос, если набран раньше, чем они готовы.
+        translating?.join()
+        return NameMatcher.rankByNames(query, apps) {
+                listOf(it.label) + it.translations
+            }
             .take(limit)
             .map { it.value }
+    }
 
     /** Удалённые пропускаются. */
     suspend fun find(keys: List<String>): List<InstalledApp> {
@@ -170,6 +194,72 @@ private class AppIndex(private val context: Context) {
                                     InstalledApp(it.label.toString(), it)
                                 }
                         }
-                        .also { apps = it }
+                        .also {
+                            apps = it
+                            translating = background.launch {
+                                translate(it)
+                            }
+                        }
             }
+
+    /**
+     * Названия берутся из ресурсов самого приложения: языки системы плюс
+     * [TRANSLATION_LOCALES]. Нет перевода — нет и имени.
+     */
+    private fun translate(apps: List<InstalledApp>) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val start = SystemClock.elapsedRealtime()
+        val system = LocaleList.getDefault()
+        val locales =
+            (List(system.size()) { system[it] } + TRANSLATION_LOCALES)
+                .distinctBy { it.language }
+        for (group in
+            apps.groupBy { it.info.applicationInfo.packageName }.values) {
+            try {
+                translate(group, locales)
+            } catch (e: Exception) {
+                Log.w("AppsPlugin", "Can't translate ${group[0].key}", e)
+            }
+        }
+        Log.i(
+            "AppsPlugin",
+            "Translated ${apps.size} apps in " +
+                "${SystemClock.elapsedRealtime() - start} ms",
+        )
+    }
+
+    /** [apps] — активности одного пакета: ресурсы грузятся один раз. */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun translate(apps: List<InstalledApp>, locales: List<Locale>) {
+        val application = apps[0].info.applicationInfo
+        val resources = locales.map { locale ->
+            val config =
+                Configuration(context.resources.configuration).apply {
+                    setLocale(locale)
+                }
+            context.packageManager.getResourcesForApplication(
+                application,
+                config,
+            )
+        }
+        for (app in apps) {
+            // Своего названия у активности нет — берётся название
+            // приложения, как и в лаунчере.
+            val label =
+                app.info.activityInfo.labelRes.takeIf { it != 0 }
+                    ?: application.labelRes
+            if (label == 0) continue
+            app.translations =
+                resources
+                    .map { it.getString(label) }
+                    .filter { !it.equals(app.label, ignoreCase = true) }
+                    .distinct()
+        }
+    }
+
+    private companion object {
+        /** Под них есть раскладка и транслит ([NameMatcher]). */
+        val TRANSLATION_LOCALES =
+            listOf(Locale.ENGLISH, Locale.forLanguageTag("ru"))
+    }
 }
