@@ -1,22 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Видимость приложений с иконкой в лаунчере: без этого LauncherApps вернёт почти пустой список.
-         Пакеты — для ряда «искать в…». -->
+    <!-- Видимость всех приложений: поиску нужны любые, а плагины работают под UID хоста, и их
+         собственные <queries> не действуют. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <!-- Кнопки таймера и будильника в виджете TogglesPlugin. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- Чтение обоев для размытого фона (BlurredWallpaper). -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
-        <package android:name="com.google.android.googlequicksearchbox" />
-        <package android:name="com.google.android.apps.maps" />
-        <package android:name="com.android.vending" />
-    </queries>
 
     <application
         android:name=".SearchApp"

@@ -1,10 +1,12 @@
 package com.zemlianikin.flexiblesearch.core
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -49,6 +51,7 @@ class QuickAction(
 )
 
 // --- Быстрые действия: «искать в…», режимы ---
+// Ряд прокручивается: кнопок может быть больше, чем влезает.
 
 class QuickActionsProps(
     val actions: List<QuickAction>,
@@ -65,7 +68,9 @@ val QuickActions =
     ) { props, style ->
         Row(
             horizontalArrangement = Arrangement.spacedBy(style.spacing),
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
         ) {
             for (action in props.actions) {
                 QuickActionButton(
