@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +56,10 @@ class SearchLayoutProps(
 )
 
 data class SearchLayoutStyle(
+    /**
+     * Поверх обоев. По умолчанию прозрачный: размытие и затемнение обоев —
+     * у окна, они видны с первого кадра.
+     */
     val background: Color,
     val padding: PaddingValues,
     val spacing: Dp,
@@ -74,7 +77,7 @@ val SearchLayout =
         name = "SearchLayout",
         defaultStyle = {
             SearchLayoutStyle(
-                MaterialTheme.colorScheme.surface,
+                Color.Transparent,
                 PaddingValues(12.dp),
                 12.dp,
                 rememberSteadyKeyboardInsets(),

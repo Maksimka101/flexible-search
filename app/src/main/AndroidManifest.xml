@@ -5,6 +5,8 @@
          Пакеты — для ряда «искать в…». -->
     <!-- Кнопки таймера и будильника в виджете TogglesPlugin. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Чтение обоев для размытого фона (BlurredWallpaper). -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <queries>
         <intent>

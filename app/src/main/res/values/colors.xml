@@ -1,0 +1,5 @@
+<resources>
+    <!-- Затемнение обоев: с размытием и без него, тогда плотнее. -->
+    <color name="wallpaper_scrim_blurred">#66FFFFFF</color>
+    <color name="wallpaper_scrim">#CCFFFFFF</color>
+</resources>

@@ -1,0 +1,3 @@
+<resources>
+    <dimen name="wallpaper_blur_radius">40dp</dimen>
+</resources>

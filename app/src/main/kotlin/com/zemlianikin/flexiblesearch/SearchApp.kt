@@ -3,6 +3,7 @@ package com.zemlianikin.flexiblesearch
 import android.app.Application
 import com.zemlianikin.flexiblesearch.core.PluginHost
 import com.zemlianikin.flexiblesearch.plugins.AppsPlugin
+import com.zemlianikin.flexiblesearch.plugins.MaterialYouPlugin
 import com.zemlianikin.flexiblesearch.plugins.SearchInAppsPlugin
 import com.zemlianikin.flexiblesearch.plugins.TogglesPlugin
 import com.zemlianikin.flexiblesearch.plugins.converter.ConverterPlugin
@@ -21,11 +22,14 @@ class SearchApp : Application() {
             TogglesPlugin(),
             // Веб и файлы после калькулятора, погода после кнопок.
             MocksPlugin(),
+            MaterialYouPlugin(),
         )
 
     val pluginSettings by lazy {
         PluginSettings(getSharedPreferences("plugins", MODE_PRIVATE))
     }
+
+    val wallpaper by lazy { BlurredWallpaper(this) }
 
     private val settingsPlugin by lazy {
         SettingsPlugin(plugins, pluginSettings)

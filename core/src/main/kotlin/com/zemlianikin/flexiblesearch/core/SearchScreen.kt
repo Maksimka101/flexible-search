@@ -1,16 +1,9 @@
 package com.zemlianikin.flexiblesearch.core
 
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import android.view.ViewTreeObserver
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -30,7 +23,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,89 +53,96 @@ fun SearchScreen(
     window: SearchWindow,
     links: Flow<Uri> = emptyFlow(),
 ) {
-    SearchTheme {
-        CompositionLocalProvider(LocalComponents provides host.components) {
-            // Id, а не сами экраны: переживают смену хоста и пересоздание
-            // Activity при складывании.
-            val backStack =
-                rememberSaveable(
-                    saver =
-                        listSaver(
-                            { it.toList() },
-                            { it.toMutableStateList() },
-                        )
-                ) {
-                    mutableStateListOf(SEARCH_ROUTE)
-                }
-            val screens by host.screens.collectAsState()
-            LaunchedEffect(screens) {
-                backStack.retainAll { it == SEARCH_ROUTE || it in screens }
-            }
-            // Запрос из ссылки ждёт, пока поиск снова на экране.
-            var linkQuery by remember { mutableStateOf<String?>(null) }
-            val currentScreens by rememberUpdatedState(screens)
-            LaunchedEffect(links) {
-                links.collect { uri ->
-                    when (val link = SearchLinks.parse(uri)) {
-                        is SearchLink.Search -> {
-                            backStack.retainAll { it == SEARCH_ROUTE }
-                            if (link.query != null) linkQuery = link.query
-                        }
-                        is SearchLink.OpenScreen ->
-                            when {
-                                link.id !in currentScreens ->
-                                    Log.w(TAG, "No screen ${link.id}")
-                                backStack.last() != link.id ->
-                                    backStack += link.id
-                            }
-                        null -> Log.w(TAG, "Unknown link $uri")
+    CompositionLocalProvider(LocalComponents provides host.components) {
+        SearchTheme(
+            SearchThemeProps {
+                // Id, а не сами экраны: переживают смену хоста и
+                // пересоздание
+                // Activity при складывании.
+                val backStack =
+                    rememberSaveable(
+                        saver =
+                            listSaver(
+                                { it.toList() },
+                                { it.toMutableStateList() },
+                            )
+                    ) {
+                        mutableStateListOf(SEARCH_ROUTE)
                     }
-                }
-            }
-            val navigator =
-                remember(backStack) {
-                    object : Navigator {
-                        override fun open(screen: Screen) {
-                            backStack += screen.id
-                        }
-
-                        override fun back() {
-                            if (backStack.size > 1) {
-                                backStack.removeAt(backStack.lastIndex)
-                            }
-                        }
-                    }
-                }
-            NavDisplay(
-                // Экраны выключенного плагина пропадают сразу, ещё до
-                // LaunchedEffect.
-                backStack =
-                    backStack.filter {
+                val screens by host.screens.collectAsState()
+                LaunchedEffect(screens) {
+                    backStack.retainAll {
                         it == SEARCH_ROUTE || it in screens
-                    },
-                onBack = navigator::back,
-                entryProvider = { route ->
-                    val screen = screens[route]
-                    NavEntry(route) {
-                        if (screen != null) {
-                            ScreenEntry(screen, window, navigator)
-                        } else {
-                            // Состояние поиска ссылается на плагины хоста.
-                            key(host) {
-                                Search(
-                                    host,
-                                    window,
-                                    navigator,
-                                    linkQuery,
-                                ) {
-                                    linkQuery = null
+                    }
+                }
+                // Запрос из ссылки ждёт, пока поиск снова на экране.
+                var linkQuery by remember { mutableStateOf<String?>(null) }
+                val currentScreens by rememberUpdatedState(screens)
+                LaunchedEffect(links) {
+                    links.collect { uri ->
+                        when (val link = SearchLinks.parse(uri)) {
+                            is SearchLink.Search -> {
+                                backStack.retainAll { it == SEARCH_ROUTE }
+                                if (link.query != null)
+                                    linkQuery = link.query
+                            }
+                            is SearchLink.OpenScreen ->
+                                when {
+                                    link.id !in currentScreens ->
+                                        Log.w(TAG, "No screen ${link.id}")
+                                    backStack.last() != link.id ->
+                                        backStack += link.id
+                                }
+                            null -> Log.w(TAG, "Unknown link $uri")
+                        }
+                    }
+                }
+                val navigator =
+                    remember(backStack) {
+                        object : Navigator {
+                            override fun open(screen: Screen) {
+                                backStack += screen.id
+                            }
+
+                            override fun back() {
+                                if (backStack.size > 1) {
+                                    backStack.removeAt(backStack.lastIndex)
                                 }
                             }
                         }
                     }
-                },
-            )
-        }
+                NavDisplay(
+                    // Экраны выключенного плагина пропадают сразу, ещё до
+                    // LaunchedEffect.
+                    backStack =
+                        backStack.filter {
+                            it == SEARCH_ROUTE || it in screens
+                        },
+                    onBack = navigator::back,
+                    entryProvider = { route ->
+                        val screen = screens[route]
+                        NavEntry(route) {
+                            if (screen != null) {
+                                ScreenEntry(screen, window, navigator)
+                            } else {
+                                // Состояние поиска ссылается на плагины
+                                // хоста.
+                                key(host) {
+                                    Search(
+                                        host,
+                                        window,
+                                        navigator,
+                                        linkQuery,
+                                    ) {
+                                        linkQuery = null
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+        )
     }
 }
 
@@ -322,25 +321,6 @@ private fun Search(
             )
         )
     }
-}
-
-/**
- * Цвета обоев на Android 12+, как у системы. Для экранов хоста и плагинов
- * вне окна поиска.
- */
-@Composable
-fun SearchTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val colors =
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-                if (dark) dynamicDarkColorScheme(context)
-                else dynamicLightColorScheme(context)
-            dark -> darkColorScheme()
-            else -> lightColorScheme()
-        }
-    MaterialTheme(colorScheme = colors, content = content)
 }
 
 /** Дольше первый кадр не ждёт: дальше — что успело. */

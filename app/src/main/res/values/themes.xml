@@ -1,7 +1,11 @@
 <resources>
-    <!-- Пока без обоев: при запуске с иконки сквозь прозрачный фон виден лаунчер. -->
+    <!-- Фон — WallpaperBackground. windowShowWallpaper — запасной вариант
+         без картинки обоев, и ещё он убирает заставку при запуске с
+         рабочего стола: окно появляется сразу целиком. -->
     <style name="Theme.Search" parent="android:Theme.DeviceDefault.DayNight">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@color/wallpaper_scrim_blurred</item>
     </style>
 </resources>
