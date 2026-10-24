@@ -26,8 +26,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
@@ -130,34 +128,32 @@ fun SearchScreen(
                             }
                         }
                     }
-                NavDisplay(
-                    // Экраны выключенного плагина пропадают сразу, ещё до
-                    // LaunchedEffect.
-                    backStack =
-                        backStack.filter {
-                            it == SEARCH_ROUTE || it in screens
-                        },
-                    onBack = navigator::back,
-                    entryProvider = { route ->
+                ScreenStack(
+                    ScreenStackProps(
+                        // Экраны выключенного плагина пропадают сразу,
+                        // ещё до LaunchedEffect.
+                        routes =
+                            backStack.filter {
+                                it == SEARCH_ROUTE || it in screens
+                            },
+                        onBack = navigator::back,
+                    ) { route ->
                         val screen = screens[route]
-                        NavEntry(route) {
-                            if (screen != null) {
-                                ScreenEntry(screen, window, navigator)
-                            } else {
-                                // Состояние поиска ссылается на плагины
-                                // хоста.
-                                key(host) {
-                                    Search(
-                                        host,
-                                        window,
-                                        navigator,
-                                        queryState,
-                                        settings,
-                                    )
-                                }
+                        if (screen != null) {
+                            ScreenEntry(screen, window, navigator)
+                        } else {
+                            // Состояние поиска ссылается на плагины хоста.
+                            key(host) {
+                                Search(
+                                    host,
+                                    window,
+                                    navigator,
+                                    queryState,
+                                    settings,
+                                )
                             }
                         }
-                    },
+                    }
                 )
             }
         )

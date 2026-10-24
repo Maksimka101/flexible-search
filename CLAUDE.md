@@ -9,7 +9,7 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   (внешние плагины подключат её `compileOnly`). Система компонентов (`Component`,
   `style`/`override`), DSL результатов, префиксы-триггеры с чипом, ряд быстрых
   действий и кнопки в строке поиска, виджеты пустой строки
-  (`widget`/`widgetFlow`), экраны плагинов (`screen`, Navigation 3), `NameMatcher`
+  (`widget`/`widgetFlow`), экраны плагинов (`screen`, Navigation 3; переходы и «назад» — `ScreenStack`), `NameMatcher`
   (fuzzy + раскладка + транслит), диплинки `SearchLinks`, настройки
   (`PluginManager` — выключенные плагины; шестерёнка в строке и экран, где
   плагины выключаются и открываются их `onOpenSettings`), виджет строки
