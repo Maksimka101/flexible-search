@@ -1,6 +1,7 @@
 package com.zemlianikin.flexiblesearch.core
 
 import android.content.Context
+import com.zemlianikin.flexiblesearch.core.results.SearchEngine
 import java.io.File
 import kotlinx.serialization.json.Json
 import okhttp3.Cache

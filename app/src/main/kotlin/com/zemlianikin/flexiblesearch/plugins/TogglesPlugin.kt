@@ -25,11 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.zemlianikin.flexiblesearch.core.ActionScope
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.buildResults
-import com.zemlianikin.flexiblesearch.core.materialIcon
+import com.zemlianikin.flexiblesearch.core.buttons.materialIcon
+import com.zemlianikin.flexiblesearch.core.results.ActionScope
+import com.zemlianikin.flexiblesearch.core.results.buildResults
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow

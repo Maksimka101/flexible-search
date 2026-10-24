@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.zemlianikin.flexiblesearch.core.materialIcon
+import com.zemlianikin.flexiblesearch.core.buttons.materialIcon
 import com.zemlianikin.flexiblesearch.plugins.converter.ConverterSettings
 import com.zemlianikin.flexiblesearch.plugins.converter.prefixError
 

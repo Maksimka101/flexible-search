@@ -6,7 +6,7 @@
 
     <application>
         <receiver
-            android:name="com.zemlianikin.flexiblesearch.core.SearchWidget"
+            android:name="com.zemlianikin.flexiblesearch.core.launcher.SearchWidget"
             android:exported="true"
             android:label="@string/search_widget_name">
             <intent-filter>

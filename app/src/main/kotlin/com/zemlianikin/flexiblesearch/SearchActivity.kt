@@ -9,9 +9,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import com.zemlianikin.flexiblesearch.core.PerfTrace
-import com.zemlianikin.flexiblesearch.core.SearchLinks
-import com.zemlianikin.flexiblesearch.core.SearchScreen
-import com.zemlianikin.flexiblesearch.core.SearchWindow
+import com.zemlianikin.flexiblesearch.core.launcher.SearchLinks
+import com.zemlianikin.flexiblesearch.core.results.SearchWindow
+import com.zemlianikin.flexiblesearch.core.search.SearchScreen
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel

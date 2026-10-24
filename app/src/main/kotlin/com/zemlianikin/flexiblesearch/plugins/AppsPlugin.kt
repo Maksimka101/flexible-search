@@ -15,11 +15,11 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.core.graphics.drawable.toBitmap
-import com.zemlianikin.flexiblesearch.core.NameMatcher
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.ResultItem
-import com.zemlianikin.flexiblesearch.core.buildResults
+import com.zemlianikin.flexiblesearch.core.matching.NameMatcher
+import com.zemlianikin.flexiblesearch.core.results.ResultItem
+import com.zemlianikin.flexiblesearch.core.results.buildResults
 import java.text.Collator
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap

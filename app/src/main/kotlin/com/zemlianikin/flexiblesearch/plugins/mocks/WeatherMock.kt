@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.materialIcon
+import com.zemlianikin.flexiblesearch.core.buttons.materialIcon
 
 /**
  * Мок погоды на пустой строке: виджет со своей отрисовкой. Нажатие —

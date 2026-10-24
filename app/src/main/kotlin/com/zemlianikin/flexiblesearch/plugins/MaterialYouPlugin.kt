@@ -7,7 +7,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.platform.LocalContext
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.SearchTheme
+import com.zemlianikin.flexiblesearch.core.search.SearchTheme
 
 /**
  * Динамические цвета Android 12+, как у системы. Сменились обои — система

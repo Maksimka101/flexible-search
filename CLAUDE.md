@@ -17,7 +17,10 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   и вид плоско, остальное группами по фичам (`triggers`, `results`, `widgets`,
   `buttons`, `launcher`, `screens`; классы `Plugin<Группа>` в файлах фич). Сервисы:
   `prefs` (свой SharedPreferences), `http` (общий OkHttp с кэшем), `json`
-  (kotlinx.serialization).
+  (kotlinx.serialization). Пакеты: в корне — `Plugin`, сервисы, `PluginManager`,
+  `PerfTrace`; подпакеты по тем же фичам (`triggers`, `results`, `widgets`,
+  `buttons`, `launcher`, `screens`) плюс `component`, `matching` (`NameMatcher`,
+  `QueryVariants`) и `search` (главный экран: строка, раскладка, тема).
 - `app/` — хост (`com.zemlianikin.flexiblesearch`) и встроенные плагины в `plugins/`
   (пишутся только через `PluginScope`, кроме виджетов главного экрана): поиск приложений
   (и по переводам названий), калькулятор и конвертер валют (`ca `, `=`;

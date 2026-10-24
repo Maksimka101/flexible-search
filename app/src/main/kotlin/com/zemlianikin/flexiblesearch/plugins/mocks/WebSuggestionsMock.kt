@@ -2,10 +2,10 @@ package com.zemlianikin.flexiblesearch.plugins.mocks
 
 import android.app.SearchManager
 import android.content.Intent
-import com.zemlianikin.flexiblesearch.core.ActionIcon
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.ResultsBuilder
-import com.zemlianikin.flexiblesearch.core.materialIcon
+import com.zemlianikin.flexiblesearch.core.buttons.ActionIcon
+import com.zemlianikin.flexiblesearch.core.buttons.materialIcon
+import com.zemlianikin.flexiblesearch.core.results.ResultsBuilder
 import kotlinx.coroutines.delay
 
 /**

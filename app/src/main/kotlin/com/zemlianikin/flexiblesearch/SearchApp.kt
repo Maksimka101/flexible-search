@@ -2,8 +2,8 @@ package com.zemlianikin.flexiblesearch
 
 import android.app.Application
 import com.zemlianikin.flexiblesearch.core.PerfTrace
-import com.zemlianikin.flexiblesearch.core.PluginApp
 import com.zemlianikin.flexiblesearch.core.PluginManager
+import com.zemlianikin.flexiblesearch.core.launcher.PluginApp
 import com.zemlianikin.flexiblesearch.plugins.AppsPlugin
 import com.zemlianikin.flexiblesearch.plugins.MaterialYouPlugin
 import com.zemlianikin.flexiblesearch.plugins.SearchInAppsPlugin

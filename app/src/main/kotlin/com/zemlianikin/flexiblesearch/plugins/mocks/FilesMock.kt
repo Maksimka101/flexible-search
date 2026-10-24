@@ -11,11 +11,11 @@ import android.text.format.Formatter
 import android.widget.Toast
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import com.zemlianikin.flexiblesearch.core.ActionIcon
-import com.zemlianikin.flexiblesearch.core.NameMatcher
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.ResultsBuilder
-import com.zemlianikin.flexiblesearch.core.materialIcon
+import com.zemlianikin.flexiblesearch.core.buttons.ActionIcon
+import com.zemlianikin.flexiblesearch.core.buttons.materialIcon
+import com.zemlianikin.flexiblesearch.core.matching.NameMatcher
+import com.zemlianikin.flexiblesearch.core.results.ResultsBuilder
 import kotlinx.coroutines.delay
 
 /**

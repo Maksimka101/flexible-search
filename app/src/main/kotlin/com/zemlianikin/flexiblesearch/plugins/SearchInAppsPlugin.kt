@@ -34,12 +34,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.graphics.drawable.toBitmap
-import com.zemlianikin.flexiblesearch.core.ActionIcon
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
-import com.zemlianikin.flexiblesearch.core.QuickAction
-import com.zemlianikin.flexiblesearch.core.QuickActions
-import com.zemlianikin.flexiblesearch.core.QuickActionsProps
+import com.zemlianikin.flexiblesearch.core.buttons.ActionIcon
+import com.zemlianikin.flexiblesearch.core.buttons.QuickAction
+import com.zemlianikin.flexiblesearch.core.buttons.QuickActions
+import com.zemlianikin.flexiblesearch.core.buttons.QuickActionsProps
 import kotlin.math.pow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
