@@ -215,6 +215,9 @@ class SearchInAppsPlugin : Plugin {
                 target.label,
                 icon,
                 id = target.packageName,
+                onRemove = {
+                    hidden.set(target.packageName, hidden = true)
+                },
             ) {
                 val intent =
                     target

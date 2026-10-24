@@ -106,6 +106,7 @@ class ConverterPlugin : Plugin {
             icon,
             id = QUICK_ACTION,
             isSelected = { it.trigger == trigger },
+            onRemove = { settings.setQuickAction(false) },
         ) {
             // Повторное нажатие убирает чип, набранное остаётся.
             if (query.trigger == trigger) setQuery(SearchQuery(query.text))
