@@ -26,7 +26,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /**
  * Ряд «искать в…»: строка уходит в веб-поиск, чаты, карты, магазины и
  * встроенный поиск приложений. Кнопка показывается, только если приложение
- * установлено, включено и принимает такой интент.
+ * установлено, включено и принимает такой интент. Enter без результатов —
+ * веб-поиск в браузере по умолчанию.
  */
 class SearchInAppsPlugin : Plugin {
     override val id = "search-in-apps"
@@ -206,6 +207,18 @@ class SearchInAppsPlugin : Plugin {
         }
         order.value = frecency.ranking(labels)
 
+        // С чипом строка — команда, а не запрос: Enter дальше.
+        scope.onSubmit { results, next ->
+            val text = query.text.trim()
+            when {
+                results.items.isNotEmpty() ||
+                    query.trigger != null ||
+                    text.isEmpty() -> next()
+                start(context, browserSearch(packageManager, text)) ->
+                    close()
+            }
+        }
+
         val prefix = "$id/"
         scope.override(QuickActions) { props, style, original ->
             val ranking by order.collectAsState()
@@ -252,6 +265,34 @@ class SearchInAppsPlugin : Plugin {
         val activity = info?.activityInfo ?: return null
         if (!activity.exported) return null
         return ComponentName(activity.packageName, activity.name)
+    }
+
+    /**
+     * Поиск в браузере по умолчанию его поисковиком; не принимает
+     * ACTION_WEB_SEARCH или браузер не выбран — страница Google.
+     */
+    private fun browserSearch(
+        packageManager: PackageManager,
+        query: String,
+    ): Intent {
+        val browser =
+            packageManager
+                .resolveActivity(
+                    view("http://"),
+                    PackageManager.MATCH_DEFAULT_ONLY,
+                )
+                ?.activityInfo
+                ?.packageName
+        val search = webSearch(query).setPackage(browser)
+        val intent =
+            if (
+                browser != null &&
+                    search.resolveActivity(packageManager) != null
+            )
+                search
+            else
+                view("https://www.google.com/search?q=${Uri.encode(query)}")
+        return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     private fun start(context: Context, intent: Intent): Boolean =

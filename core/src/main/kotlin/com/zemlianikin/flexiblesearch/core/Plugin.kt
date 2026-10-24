@@ -214,6 +214,20 @@ internal constructor(
         register { host.quickActionList.update { it + quickAction } }
     }
 
+    /**
+     * Обработать Enter в строке поиска или передать дальше. Внутри всех —
+     * запуск первого результата; позже зарегистрированный — снаружи, как у
+     * [override]:
+     * ```
+     * onSubmit { results, next ->
+     *     if (results.items.isEmpty()) webSearch(query.text) else next()
+     * }
+     * ```
+     */
+    fun onSubmit(handler: SubmitHandler) = register {
+        host.submitHandlerList.update { it + handler }
+    }
+
     /** Кнопка-иконка справа в строке поиска; [label] — для TalkBack. */
     fun searchBarAction(
         label: String,
@@ -306,6 +320,8 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
         MutableStateFlow(emptyList<QuickAction>())
     internal val searchBarActionList =
         MutableStateFlow(emptyList<QuickAction>())
+    internal val submitHandlerList =
+        MutableStateFlow(emptyList<SubmitHandler>())
     internal val widgetList =
         MutableStateFlow(emptyList<RegisteredWidget>())
     internal val screenMap = MutableStateFlow(emptyMap<String, Screen>())
@@ -348,6 +364,10 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
             }
         }
     }
+
+    /** Enter в строке поиска: см. [PluginScope.onSubmit]. */
+    fun submit(scope: ActionScope, results: SearchState) =
+        submitChain(submitHandlerList.value, scope, results)
 
     /** При одинаковых префиксах побеждает первый зарегистрированный. */
     internal fun addTrigger(trigger: Trigger) {

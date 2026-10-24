@@ -258,14 +258,10 @@ private fun Search(
                                     text = it
                                 }
                             },
-                            // Цель Enter — первый результат, как
-                            // targetIndex по умолчанию в Results.
-                            onSubmit = {
-                                state.items
-                                    .firstOrNull()
-                                    ?.action
-                                    ?.invoke(actions)
-                            },
+                            // Без плагинов цель Enter — первый
+                            // результат, как targetIndex по умолчанию в
+                            // Results.
+                            onSubmit = { host.submit(actions, state) },
                             focusRequester = focusRequester,
                             trigger = query.trigger,
                             onExitTrigger = { triggerId = null },

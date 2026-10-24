@@ -42,6 +42,13 @@ interface ActionScope : SearchWindow, Navigator {
 
 typealias Action = ActionScope.() -> Unit
 
+/**
+ * Звено Enter: сделать своё или передать дальше через `next`, см.
+ * [PluginScope.onSubmit].
+ */
+typealias SubmitHandler =
+    ActionScope.(results: SearchState, next: () -> Unit) -> Unit
+
 /** [ActionScope] окна для своей отрисовки ([ResultItem.Custom]). */
 val LocalActionScope =
     staticCompositionLocalOf<ActionScope> {
@@ -260,6 +267,23 @@ class SearchState(
     companion object {
         val Empty = SearchState(emptyList(), loading = false)
     }
+}
+
+/**
+ * Enter по цепочке [handlers]: последний — снаружи, внутри всех — первый
+ * результат.
+ */
+internal fun submitChain(
+    handlers: List<SubmitHandler>,
+    scope: ActionScope,
+    results: SearchState,
+) {
+    val first: () -> Unit = {
+        results.items.firstOrNull()?.action?.invoke(scope)
+    }
+    handlers.fold(first) { next, handler ->
+        { scope.handler(results, next) }
+    }()
 }
 
 /**
