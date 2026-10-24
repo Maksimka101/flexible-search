@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -357,8 +358,12 @@ class SearchInAppsPlugin : Plugin {
             supportingContent =
                 if (installed) null else ({ Text("Not installed") }),
             trailingContent = {
-                // Нажатие обрабатывает вся строка.
-                Switch(checked = visible, onCheckedChange = null)
+                // Нажатие обрабатывает вся строка. LazyColumn отдаёт
+                // ушедшую строку другой цели, а Switch анимирует смену
+                // checked в своём узле — key создаёт узел заново.
+                key(target.packageName) {
+                    Switch(checked = visible, onCheckedChange = null)
+                }
             },
             colors =
                 if (installed) ListItemDefaults.colors()

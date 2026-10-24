@@ -137,6 +137,20 @@ internal constructor(
             .also { register { host.addTrigger(it) } }
 
     /**
+     * Заменить префиксы своего [trigger], например из настроек плагина.
+     * Пустой список — триггер включается только через
+     * `setQuery(SearchQuery(text, trigger))`.
+     */
+    fun setPrefixes(trigger: Trigger, prefixes: List<String>) {
+        require(trigger.id.startsWith("$pluginId/")) {
+            "${trigger.id} is not a trigger of $pluginId"
+        }
+        require(prefixes.none { it.isEmpty() }) { "Empty prefix" }
+        trigger.prefixes = prefixes.toList()
+        host.warnTaken(trigger)
+    }
+
+    /**
      * Показывать результаты без Compose, один ответ на запрос:
      * ```
      * results(title = "Files") { query ->
@@ -391,12 +405,18 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
 
     /** При одинаковых префиксах побеждает первый зарегистрированный. */
     internal fun addTrigger(trigger: Trigger) {
+        warnTaken(trigger)
+        triggerList.update { it + trigger }
+    }
+
+    internal fun warnTaken(trigger: Trigger) {
         for (prefix in trigger.prefixes) {
             val owner =
                 triggerList.value.find { other ->
-                    other.prefixes.any {
-                        it.equals(prefix, ignoreCase = true)
-                    }
+                    other !== trigger &&
+                        other.prefixes.any {
+                            it.equals(prefix, ignoreCase = true)
+                        }
                 }
             if (owner != null) {
                 Log.w(
@@ -405,7 +425,6 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
                 )
             }
         }
-        triggerList.update { it + trigger }
     }
 
     private companion object {

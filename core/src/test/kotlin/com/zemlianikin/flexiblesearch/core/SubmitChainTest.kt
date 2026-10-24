@@ -16,6 +16,8 @@ class SubmitChainTest {
 
             override fun setQuery(input: String) {}
 
+            override fun setQuery(query: SearchQuery) {}
+
             override fun close() {}
 
             override fun open(screen: Screen) {}

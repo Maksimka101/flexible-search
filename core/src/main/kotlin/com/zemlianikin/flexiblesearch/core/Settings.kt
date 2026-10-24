@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -104,13 +105,18 @@ val PluginRow =
                             Modifier.padding(end = 16.dp).height(32.dp)
                         )
                     }
-                    Switch(
-                        checked = props.enabled,
-                        onCheckedChange =
-                            props.onEnabledChange.takeIf {
-                                openSettings != null
-                            },
-                    )
+                    // LazyColumn отдаёт ушедшую строку другому плагину,
+                    // а Switch анимирует смену checked в своём узле —
+                    // key создаёт узел заново.
+                    key(props.plugin.id) {
+                        Switch(
+                            checked = props.enabled,
+                            onCheckedChange =
+                                props.onEnabledChange.takeIf {
+                                    openSettings != null
+                                },
+                        )
+                    }
                 }
             },
             colors = style.colors,

@@ -3,27 +3,25 @@ package com.zemlianikin.flexiblesearch.core
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Префикс-команда: `calc 2+2`, `=2+2`. Пока префикс в строке, запрос
+ * Префикс-команда: `calc 2+2`, `=2+2`. Пока триггер включён, запрос
  * получают только провайдеры этого триггера, и даже с пустым остатком. В
- * строке префикс показывается чипом с [label].
+ * строке он показывается чипом с [label]. Включается префиксом или
+ * `setQuery(SearchQuery(text, trigger))`, поэтому префиксов может не быть.
  */
 class Trigger
 internal constructor(
     val id: String,
     val label: String,
-    val prefixes: List<String>,
+    prefixes: List<String>,
     /** Подсказка в поле, пока после префикса ничего не набрано. */
     val placeholder: String?,
     /** Показывается в чипе перед [label]. */
     val icon: ActionIcon? = null,
 ) {
-    /**
-     * Строка, которая включает этот триггер: `command("2+2")` → `calc 2+2`.
-     */
-    fun command(text: String = ""): String {
-        val prefix = prefixes.first()
-        return prefix + separatorAfter(prefix) + text
-    }
+    /** Меняется через [PluginScope.setPrefixes], парсер видит сразу. */
+    @Volatile
+    var prefixes: List<String> = prefixes
+        internal set
 }
 
 /**

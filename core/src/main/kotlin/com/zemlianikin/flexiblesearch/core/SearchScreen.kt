@@ -207,6 +207,10 @@ private fun Search(
                 override fun setQuery(input: String) {
                     queryState.set(host.triggers.parse(input))
                 }
+
+                override fun setQuery(query: SearchQuery) {
+                    queryState.set(query)
+                }
             }
         }
     // Каждое открытие окна: плагины обновляют данные, а запрос
@@ -296,12 +300,17 @@ private fun Search(
                             // Подсказка заменяет текст, чип
                             // остаётся.
                             onFill = {
-                                actions.setQuery(
-                                    query.trigger?.command(it) ?: it
-                                )
+                                val trigger = query.trigger
+                                if (trigger == null) actions.setQuery(it)
+                                else
+                                    actions.setQuery(
+                                        SearchQuery(it, trigger)
+                                    )
                             },
                             onShowAll = {
-                                actions.setQuery(it.command(query.text))
+                                actions.setQuery(
+                                    SearchQuery(query.text, it)
+                                )
                             },
                         )
                     )

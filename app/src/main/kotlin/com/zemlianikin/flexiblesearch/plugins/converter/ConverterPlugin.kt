@@ -24,9 +24,12 @@ import com.zemlianikin.flexiblesearch.core.ActionScope
 import com.zemlianikin.flexiblesearch.core.LocalActionScope
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
+import com.zemlianikin.flexiblesearch.core.QuickActions
+import com.zemlianikin.flexiblesearch.core.QuickActionsProps
 import com.zemlianikin.flexiblesearch.core.SearchBar
 import com.zemlianikin.flexiblesearch.core.SearchLayout
 import com.zemlianikin.flexiblesearch.core.SearchLayoutProps
+import com.zemlianikin.flexiblesearch.core.SearchQuery
 import com.zemlianikin.flexiblesearch.core.materialIcon
 import com.zemlianikin.flexiblesearch.plugins.converter.calc.Calculation
 import com.zemlianikin.flexiblesearch.plugins.converter.calc.Value
@@ -45,6 +48,7 @@ import com.zemlianikin.flexiblesearch.plugins.converter.ui.CalculatorState
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.ConverterKeys
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.ConverterResults
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.KeyboardLayout
+import com.zemlianikin.flexiblesearch.plugins.converter.ui.SettingsContent
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.ValueFormatter
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.WithoutSystemKeyboard
 import com.zemlianikin.flexiblesearch.plugins.converter.ui.conversions
@@ -58,9 +62,10 @@ import kotlin.time.Clock
 /**
  * Калькулятор и конвертер валют из currency-converter: `2+2*2`, `10 usd -
  * 10% to eur`, `5k руб в $`. Без префикса — карточка в общем поиске.
- * Префикс `ca` или `=` (и кнопка в ряду) открывает экран конвертера: свой
- * numpad вместо клавиатуры, чипы валют, сумма во всех частых валютах. Курсы
- * — fawazahmed0/exchange-api, раз в сутки, с офлайн-кэшем.
+ * Префикс `ca` или `=` (меняются в настройках) и кнопка в ряду открывают
+ * экран конвертера: свой numpad вместо клавиатуры, чипы валют, сумма во
+ * всех частых валютах. Курсы — fawazahmed0/exchange-api, раз в сутки, с
+ * офлайн-кэшем.
  */
 class ConverterPlugin : Plugin {
     override val id = "converter"
@@ -82,24 +87,51 @@ class ConverterPlugin : Plugin {
         val usage =
             KeyValueUsageStore(SharedPrefsStore(scope.prefs, "usage."))
         val uiPrefs = SharedPrefsStore(scope.prefs, "ui.")
+        val settings =
+            ConverterSettings(
+                SharedPrefsStore(scope.prefs, "settings."),
+                defaultPrefixes = listOf("ca", "="),
+            )
         val icon = ActionIcon.Vector(CalculatorIcon)
         val trigger =
             scope.trigger(
                 "Calculator",
-                "ca",
-                "=",
+                *settings.prefixes.value.toTypedArray(),
                 placeholder = "10 usd - 10% to eur",
                 icon = icon,
             )
         scope.quickAction(
             "Calculator",
             icon,
+            id = QUICK_ACTION,
             isSelected = { it.trigger == trigger },
         ) {
-            // Повторное нажатие убирает префикс, набранное остаётся.
-            if (query.trigger == trigger) setQuery(query.text)
-            else setQuery(trigger.command(query.text))
+            // Повторное нажатие убирает чип, набранное остаётся.
+            if (query.trigger == trigger) setQuery(SearchQuery(query.text))
+            else setQuery(SearchQuery(query.text, trigger))
         }
+        val quickActionId = "$id/$QUICK_ACTION"
+        scope.override(QuickActions) { props, style, original ->
+            val visible by settings.quickAction.collectAsState()
+            if (visible) original(props, style)
+            else
+                original(
+                    QuickActionsProps(
+                        props.actions.filter { it.id != quickActionId },
+                        props.query,
+                        props.onClick,
+                    ),
+                    style,
+                )
+        }
+        val settingsScreen =
+            scope.screen(name) {
+                SettingsContent(settings) {
+                    settings.setPrefixes(it)
+                    scope.setPrefixes(trigger, it)
+                }
+            }
+        scope.onOpenSettings { open(settingsScreen) }
 
         // Состояние экрана живёт в окне, а не в строке поиска: его читают
         // и поле ввода, и numpad, и результаты.
@@ -140,7 +172,7 @@ class ConverterPlugin : Plugin {
             // поиска нужна numpad.
             val keyboard = keyboardLayout(uiPrefs)
             val format = remember { ValueFormatter() }
-            state.onEdit = { actions.setQuery(trigger.command(it)) }
+            state.onEdit = { actions.setQuery(SearchQuery(it, trigger)) }
             if (active) state.sync(query.text)
             val screen = ConverterScreen(state, keyboard)
             val keys: @Composable () -> Unit = {
@@ -282,6 +314,7 @@ class ConverterPlugin : Plugin {
 
     private companion object {
         const val INLINE_CONVERSIONS = 3
+        const val QUICK_ACTION = "calculator"
     }
 }
 

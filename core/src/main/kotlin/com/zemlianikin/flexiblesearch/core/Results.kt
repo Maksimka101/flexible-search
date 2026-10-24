@@ -38,6 +38,9 @@ interface ActionScope : SearchWindow, Navigator {
      * Префикс в начале строки сразу становится чипом: `setQuery("calc ")`.
      */
     fun setQuery(input: String)
+
+    /** Включить триггер без префикса: `setQuery(SearchQuery("", calc))`. */
+    fun setQuery(query: SearchQuery)
 }
 
 typealias Action = ActionScope.() -> Unit

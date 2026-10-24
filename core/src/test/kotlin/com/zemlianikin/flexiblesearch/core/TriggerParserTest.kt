@@ -39,4 +39,15 @@ class TriggerParserTest {
         val parser = TriggerParser(MutableStateFlow(listOf(calc, other)))
         assertEquals(calc, parser.parse("calc 1").trigger)
     }
+
+    @Test
+    fun seesChangedPrefixes() {
+        val calc = Trigger("calc", "Calculator", listOf("calc"), null)
+        val parser = TriggerParser(MutableStateFlow(listOf(calc)))
+        calc.prefixes = listOf("ca")
+        assertEquals(SearchQuery("1", calc), parser.parse("ca 1"))
+        assertEquals(SearchQuery("calc 1"), parser.parse("calc 1"))
+        calc.prefixes = emptyList()
+        assertEquals(SearchQuery("ca 1"), parser.parse("ca 1"))
+    }
 }
