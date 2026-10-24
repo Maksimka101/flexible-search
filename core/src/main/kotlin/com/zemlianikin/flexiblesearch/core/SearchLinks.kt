@@ -8,6 +8,7 @@ import android.net.Uri
  * flexiblesearch://search               — открыть, запрос как был
  * flexiblesearch://search?q=files%20pdf  — с запросом, префикс — чипом
  * flexiblesearch://screen/<id экрана>    — экран плагина поверх поиска
+ * flexiblesearch://action/<id кнопки>    — действие кнопки на главном
  * ```
  *
  * Хост принимает их в своей Activity и передаёт в [SearchScreen].
@@ -27,6 +28,10 @@ object SearchLinks {
     fun screen(id: String): Uri =
         Uri.Builder().scheme(SCHEME).authority(SCREEN).path(id).build()
 
+    /** Действие [HomeScreenButton] по id, `плагин/кнопка`. */
+    fun action(id: String): Uri =
+        Uri.Builder().scheme(SCHEME).authority(ACTION).path(id).build()
+
     internal fun parse(uri: Uri): SearchLink? =
         when {
             uri.scheme != SCHEME -> null
@@ -37,11 +42,17 @@ object SearchLinks {
                     ?.removePrefix("/")
                     ?.takeIf { it.isNotEmpty() }
                     ?.let(SearchLink::OpenScreen)
+            uri.authority == ACTION ->
+                uri.path
+                    ?.removePrefix("/")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let(SearchLink::RunAction)
             else -> null
         }
 
     private const val SEARCH = "search"
     private const val SCREEN = "screen"
+    private const val ACTION = "action"
     private const val QUERY = "q"
 }
 
@@ -49,4 +60,6 @@ internal sealed interface SearchLink {
     data class Search(val query: String?) : SearchLink
 
     data class OpenScreen(val id: String) : SearchLink
+
+    data class RunAction(val id: String) : SearchLink
 }

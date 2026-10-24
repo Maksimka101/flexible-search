@@ -31,8 +31,8 @@ import com.zemlianikin.flexiblesearch.plugins.converter.ConverterSettings
 import com.zemlianikin.flexiblesearch.plugins.converter.prefixError
 
 /**
- * Экран настроек: кнопка в ряду и префиксы. Новые префиксы — в
- * [onPrefixesChange], он же сохраняет их в [settings].
+ * Экран настроек: кнопки в ряду и на главном экране, префиксы. Новые
+ * префиксы — в [onPrefixesChange], он же сохраняет их в [settings].
  */
 @Composable
 internal fun SettingsContent(
@@ -40,6 +40,7 @@ internal fun SettingsContent(
     onPrefixesChange: (List<String>) -> Unit,
 ) {
     val quickAction by settings.quickAction.collectAsState()
+    val homeScreenButton by settings.homeScreenButton.collectAsState()
     val prefixes by settings.prefixes.collectAsState()
     var input by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -53,21 +54,19 @@ internal fun SettingsContent(
     }
     LazyColumn {
         item {
-            ListItem(
-                headlineContent = { Text("Calculator button") },
-                supportingContent = {
-                    Text("In the bottom row, next to the apps")
-                },
-                trailingContent = {
-                    // Нажатие обрабатывает вся строка.
-                    Switch(checked = quickAction, onCheckedChange = null)
-                },
-                modifier =
-                    Modifier.toggleable(
-                        value = quickAction,
-                        role = Role.Switch,
-                        onValueChange = settings::setQuickAction,
-                    ),
+            SwitchRow(
+                "Calculator button",
+                "In the bottom row, next to the apps",
+                quickAction,
+                settings::setQuickAction,
+            )
+        }
+        item {
+            SwitchRow(
+                "Home screen button",
+                "Next to the search bar in the home screen widget",
+                homeScreenButton,
+                settings::setHomeScreenButton,
             )
         }
         item {
@@ -129,6 +128,29 @@ internal fun SettingsContent(
             )
         }
     }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(description) },
+        trailingContent = {
+            // Нажатие обрабатывает вся строка.
+            Switch(checked = checked, onCheckedChange = null)
+        },
+        modifier =
+            Modifier.toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            ),
+    )
 }
 
 /** Как префикс набирают: после словесного нужен пробел, см. core. */

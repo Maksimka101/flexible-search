@@ -5,8 +5,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Настройки калькулятора: кнопка в ряду и префиксы. Префиксов может не быть
- * совсем: карточка в общем поиске и кнопка в ряду работают и без них.
+ * Настройки калькулятора: кнопки в ряду и на главном экране, префиксы.
+ * Префиксов может не быть совсем: карточка в общем поиске и кнопка в ряду
+ * работают и без них.
  */
 internal class ConverterSettings(
     private val store: KeyValueStore,
@@ -21,11 +22,16 @@ internal class ConverterSettings(
         )
     private val quickActionState =
         MutableStateFlow(store[QUICK_ACTION] != "false")
+    private val homeScreenButtonState =
+        MutableStateFlow(store[HOME_SCREEN_BUTTON] != "false")
 
     /** Первый вставляет кнопка в ряду. */
     val prefixes: StateFlow<List<String>> = prefixState
 
     val quickAction: StateFlow<Boolean> = quickActionState
+
+    /** В виджете поиска на главном экране. */
+    val homeScreenButton: StateFlow<Boolean> = homeScreenButtonState
 
     fun setPrefixes(prefixes: List<String>) {
         store[PREFIXES] = prefixes.joinToString(" ")
@@ -37,9 +43,15 @@ internal class ConverterSettings(
         quickActionState.value = visible
     }
 
+    fun setHomeScreenButton(visible: Boolean) {
+        store[HOME_SCREEN_BUTTON] = visible.toString()
+        homeScreenButtonState.value = visible
+    }
+
     private companion object {
         const val PREFIXES = "prefixes"
         const val QUICK_ACTION = "quickAction"
+        const val HOME_SCREEN_BUTTON = "homeScreenButton"
     }
 }
 

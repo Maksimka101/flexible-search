@@ -28,6 +28,10 @@ class PluginManager(context: Context, val plugins: List<Plugin>) {
 
     private var built: Pair<Set<String>, PluginHost>? = null
 
+    init {
+        SearchWidget.watch(context, this)
+    }
+
     /**
      * Плагины живут дольше окна: список приложений и кэш иконок не грузятся
      * заново при каждом открытии. Хост собирается заново, только когда

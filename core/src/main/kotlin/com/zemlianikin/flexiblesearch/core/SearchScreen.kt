@@ -88,6 +88,41 @@ fun SearchScreen(
                     rememberSaveable(host, saver = QueryState.Saver) {
                         QueryState()
                     }
+                val navigator =
+                    remember(backStack) {
+                        object : Navigator {
+                            override fun open(screen: Screen) {
+                                backStack += screen.id
+                            }
+
+                            override fun back() {
+                                if (backStack.size > 1) {
+                                    backStack.removeAt(backStack.lastIndex)
+                                }
+                            }
+                        }
+                    }
+                // Здесь, а не в Search: ссылки кнопок на главном
+                // выполняют действия и при закрытом окне.
+                val actions =
+                    remember(window, host, queryState, navigator) {
+                        object :
+                            ActionScope,
+                            SearchWindow by window,
+                            Navigator by navigator {
+                            override val query
+                                get() = queryState.query(host)
+
+                            override fun setQuery(input: String) {
+                                queryState.set(host.triggers.parse(input))
+                            }
+
+                            override fun setQuery(query: SearchQuery) {
+                                queryState.set(query)
+                            }
+                        }
+                    }
+                val currentActions by rememberUpdatedState(actions)
                 val currentQueryState by rememberUpdatedState(queryState)
                 val currentHost by rememberUpdatedState(host)
                 val currentScreens by rememberUpdatedState(screens)
@@ -110,24 +145,21 @@ fun SearchScreen(
                                     backStack.last() != link.id ->
                                         backStack += link.id
                                 }
+                            is SearchLink.RunAction -> {
+                                backStack.retainAll { it == SEARCH_ROUTE }
+                                val button =
+                                    currentHost.homeScreenButtons.value
+                                        .find {
+                                            it.id == link.id
+                                        }
+                                if (button == null)
+                                    Log.w(TAG, "No button ${link.id}")
+                                else button.action(currentActions)
+                            }
                             null -> Log.w(TAG, "Unknown link $uri")
                         }
                     }
                 }
-                val navigator =
-                    remember(backStack) {
-                        object : Navigator {
-                            override fun open(screen: Screen) {
-                                backStack += screen.id
-                            }
-
-                            override fun back() {
-                                if (backStack.size > 1) {
-                                    backStack.removeAt(backStack.lastIndex)
-                                }
-                            }
-                        }
-                    }
                 ScreenStack(
                     ScreenStackProps(
                         // Экраны выключенного плагина пропадают сразу,
@@ -146,8 +178,7 @@ fun SearchScreen(
                             key(host) {
                                 Search(
                                     host,
-                                    window,
-                                    navigator,
+                                    actions,
                                     queryState,
                                     settings,
                                 )
@@ -183,36 +214,13 @@ private fun ScreenEntry(
 @Composable
 private fun Search(
     host: PluginHost,
-    window: SearchWindow,
-    navigator: Navigator,
+    actions: ActionScope,
     queryState: QueryState,
     settings: Screen,
 ) {
     var text by queryState::text
     var triggerId by queryState::triggerId
-    val query = SearchQuery(text, host.triggers.byId(triggerId))
-    val actions =
-        remember(window, queryState) {
-            object :
-                ActionScope,
-                SearchWindow by window,
-                Navigator by navigator {
-                override val query
-                    get() =
-                        SearchQuery(
-                            text,
-                            host.triggers.byId(triggerId),
-                        )
-
-                override fun setQuery(input: String) {
-                    queryState.set(host.triggers.parse(input))
-                }
-
-                override fun setQuery(query: SearchQuery) {
-                    queryState.set(query)
-                }
-            }
-        }
+    val query = queryState.query(host)
     // Каждое открытие окна: плагины обновляют данные, а запрос
     // пересчитывается — пока окно скрыто, результаты устаревают.
     var opens by remember { mutableIntStateOf(0) }
@@ -325,7 +333,7 @@ private fun Search(
                         }
                     )
                 },
-                onDismiss = window::close,
+                onDismiss = actions::close,
             )
         )
     }
@@ -338,6 +346,9 @@ private fun Search(
 private class QueryState(text: String = "", triggerId: String? = null) {
     var text by mutableStateOf(text)
     var triggerId by mutableStateOf(triggerId)
+
+    fun query(host: PluginHost) =
+        SearchQuery(text, host.triggers.byId(triggerId))
 
     fun set(query: SearchQuery) {
         triggerId = query.trigger?.id

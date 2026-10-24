@@ -13,7 +13,7 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   (fuzzy + раскладка + транслит), диплинки `SearchLinks`, настройки
   (`PluginManager` — выключенные плагины; шестерёнка в строке и экран, где
   плагины выключаются и открываются их `onOpenSettings`), виджет строки
-  поиска на главный экран и сервисы для плагинов в `PluginScope`:
+  поиска на главный экран с кнопками плагинов (`homeScreenButton`) и сервисы для плагинов в `PluginScope`:
   `prefs` (свой SharedPreferences), `http` (общий OkHttp с кэшем), `json`
   (kotlinx.serialization).
 - `app/` — хост (`com.zemlianikin.flexiblesearch`) и встроенные плагины в `plugins/`

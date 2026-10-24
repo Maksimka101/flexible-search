@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ConverterSettingsTest {
     private class MapStore : KeyValueStore {
@@ -51,6 +52,15 @@ class ConverterSettingsTest {
         val store = MapStore()
         ConverterSettings(store, defaults).setQuickAction(false)
         assertFalse(ConverterSettings(store, defaults).quickAction.value)
+    }
+
+    @Test
+    fun homeScreenButtonIsRemembered() {
+        val store = MapStore()
+        ConverterSettings(store, defaults).setHomeScreenButton(false)
+        val settings = ConverterSettings(store, defaults)
+        assertFalse(settings.homeScreenButton.value)
+        assertTrue(settings.quickAction.value)
     }
 
     @Test

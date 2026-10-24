@@ -255,6 +255,29 @@ internal constructor(
     }
 
     /**
+     * Кнопка справа от строки в виджете поиска на главном экране, по
+     * порядку плагинов. Тап открывает окно поиска и выполняет [action].
+     * [visible] — например настройка плагина: виджет перерисуется сам.
+     *
+     * ```
+     * homeScreenButton("Calculator", icon) {
+     *     setQuery(SearchQuery("", calc))
+     * }
+     * ```
+     */
+    fun homeScreenButton(
+        label: String,
+        icon: ActionIcon,
+        id: String = label,
+        visible: StateFlow<Boolean> = MutableStateFlow(true),
+        action: Action,
+    ) {
+        val button =
+            HomeScreenButton("$pluginId/$id", label, icon, visible, action)
+        register { host.homeScreenButtonList.update { it + button } }
+    }
+
+    /**
      * Свой экран поверх поиска, с заголовком [title] и «назад»:
      * ```
      * val settings = screen("Settings") { Text("...") }
@@ -348,6 +371,8 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
         MutableStateFlow(emptyList<QuickAction>())
     internal val submitHandlerList =
         MutableStateFlow(emptyList<SubmitHandler>())
+    internal val homeScreenButtonList =
+        MutableStateFlow(emptyList<HomeScreenButton>())
     internal val widgetList =
         MutableStateFlow(emptyList<RegisteredWidget>())
     internal val screenMap = MutableStateFlow(emptyMap<String, Screen>())
@@ -361,6 +386,8 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
     val quickActions: StateFlow<List<QuickAction>> = quickActionList
     val searchBarActions: StateFlow<List<QuickAction>> = searchBarActionList
     val widgets = WidgetEngine(widgetList)
+    val homeScreenButtons: StateFlow<List<HomeScreenButton>> =
+        homeScreenButtonList
 
     /** Экраны плагинов по [Screen.id]. */
     val screens: StateFlow<Map<String, Screen>> = screenMap

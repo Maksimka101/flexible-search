@@ -62,10 +62,10 @@ import kotlin.time.Clock
 /**
  * Калькулятор и конвертер валют из currency-converter: `2+2*2`, `10 usd -
  * 10% to eur`, `5k руб в $`. Без префикса — карточка в общем поиске.
- * Префикс `ca` или `=` (меняются в настройках) и кнопка в ряду открывают
- * экран конвертера: свой numpad вместо клавиатуры, чипы валют, сумма во
- * всех частых валютах. Курсы — fawazahmed0/exchange-api, раз в сутки, с
- * офлайн-кэшем.
+ * Префикс `ca` или `=` (меняются в настройках), кнопка в ряду и на главном
+ * экране открывают экран конвертера: свой numpad вместо клавиатуры, чипы
+ * валют, сумма во всех частых валютах. Курсы — fawazahmed0/exchange-api,
+ * раз в сутки, с офлайн-кэшем.
  */
 class ConverterPlugin : Plugin {
     override val id = "converter"
@@ -109,6 +109,13 @@ class ConverterPlugin : Plugin {
             // Повторное нажатие убирает чип, набранное остаётся.
             if (query.trigger == trigger) setQuery(SearchQuery(query.text))
             else setQuery(SearchQuery(query.text, trigger))
+        }
+        scope.homeScreenButton(
+            "Calculator",
+            icon,
+            visible = settings.homeScreenButton,
+        ) {
+            setQuery(SearchQuery("", trigger))
         }
         val quickActionId = "$id/$QUICK_ACTION"
         scope.override(QuickActions) { props, style, original ->

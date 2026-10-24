@@ -3,8 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Полупрозрачная подложка, в ней плотнее сама строка. -->
-    <FrameLayout
+    <!-- Полупрозрачная подложка, в ней плотнее строка и кнопки плагинов. -->
+    <LinearLayout
         android:id="@+id/search_widget_bar"
         android:layout_width="match_parent"
         android:layout_height="64dp"
@@ -14,8 +14,9 @@
         android:padding="6dp">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_weight="1"
             android:background="@drawable/search_widget_field"
             android:gravity="center_vertical"
             android:paddingStart="16dp"
@@ -28,5 +29,11 @@
                 android:importantForAccessibility="no"
                 android:src="@drawable/ic_search" />
         </LinearLayout>
-    </FrameLayout>
+
+        <!-- search_widget_button, по одной на кнопку плагина. -->
+        <LinearLayout
+            android:id="@+id/search_widget_buttons"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent" />
+    </LinearLayout>
 </FrameLayout>
