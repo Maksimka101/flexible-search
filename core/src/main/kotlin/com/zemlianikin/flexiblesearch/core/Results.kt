@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,7 +48,7 @@ typealias Action = ActionScope.() -> Unit
 
 /**
  * Звено Enter: сделать своё или передать дальше через `next`, см.
- * [PluginScope.onSubmit].
+ * [PluginResults.onSubmit].
  */
 typealias SubmitHandler =
     ActionScope.(results: SearchState, next: () -> Unit) -> Unit
@@ -190,7 +191,7 @@ fun buildResults(build: ResultsBuilder.() -> Unit): List<ResultItem> =
  */
 typealias ResultProvider = (query: String) -> Flow<List<ResultItem>>
 
-/** Провайдер с одним ответом; сахар для `PluginScope.results { }`. */
+/** Провайдер с одним ответом; сахар для `PluginResults.add { }`. */
 internal fun singleResult(
     provide: suspend ResultsBuilder.(query: String) -> Unit
 ): ResultProvider = { query ->
@@ -419,4 +420,98 @@ class SearchEngine(
         const val DEFAULT_PROVIDER_TIME_LIMIT_MS = 30_000L
         private const val TAG = "SearchEngine"
     }
+}
+
+/** Результаты плагина и Enter в строке поиска, `PluginScope.results`. */
+class PluginResults internal constructor(private val scope: PluginScope) {
+    /**
+     * Показывать результаты без Compose, один ответ на запрос:
+     * ```
+     * add(title = "Files") { query ->
+     *     item(file.name, id = file.path) { ... }
+     * }
+     * ```
+     *
+     * Без [trigger] — на любую непустую строку без префикса, с [onEmpty] —
+     * и на пустую (недавние, предложенные); с ним — только на `префикс
+     * остаток`, остаток может быть пустым. Результаты провайдера — одна
+     * группа с заголовком [title], до 3 строк; [fullList] — триггер, где
+     * видна вся группа. При каждом открытии окна провайдер получает текущий
+     * запрос заново.
+     */
+    fun add(
+        trigger: Trigger? = null,
+        title: String? = null,
+        icon: ActionIcon? = null,
+        fullList: Trigger? = null,
+        onEmpty: Boolean = false,
+        provide: suspend ResultsBuilder.(query: String) -> Unit,
+    ) =
+        addFlow(
+            trigger,
+            title,
+            icon,
+            fullList,
+            onEmpty,
+            singleResult(provide),
+        )
+
+    /**
+     * Несколько ответов на запрос, каждый — полный список, параметры — как
+     * у [add]:
+     * ```
+     * addFlow { query ->
+     *     flow {
+     *         emit(buildResults { item(cached, id = ...) { ... } })
+     *         emit(buildResults { item(fresh, id = ...) { ... } })
+     *     }
+     * }
+     * ```
+     */
+    fun addFlow(
+        trigger: Trigger? = null,
+        title: String? = null,
+        icon: ActionIcon? = null,
+        fullList: Trigger? = null,
+        onEmpty: Boolean = false,
+        provide: ResultProvider,
+    ) {
+        val provider =
+            RegisteredProvider(
+                scope.pluginId,
+                trigger,
+                title,
+                fullList,
+                provide,
+                icon,
+                onEmpty,
+            )
+        scope.register {
+            scope.host.providerList.update { it + provider }
+        }
+    }
+
+    /**
+     * Обработать Enter в строке поиска или передать дальше. Внутри всех —
+     * запуск первого результата; позже зарегистрированный — снаружи, как у
+     * `override`:
+     * ```
+     * onSubmit { results, next ->
+     *     if (results.items.isEmpty()) webSearch(query.text) else next()
+     * }
+     * ```
+     */
+    fun onSubmit(handler: SubmitHandler) = scope.register {
+        scope.host.submitHandlerList.update { it + handler }
+    }
+
+    /**
+     * Сколько провайдер может отвечать на запрос, потом — отмена. Одно
+     * значение на всех: поменял один плагин — поменялось для всех.
+     */
+    var timeLimitMs: Long
+        get() = scope.host.services.providerTimeLimitMs
+        set(value) {
+            scope.host.services.providerTimeLimitMs = value
+        }
 }

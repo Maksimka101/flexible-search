@@ -18,7 +18,7 @@ internal constructor(
     /** Показывается в чипе перед [label]. */
     val icon: ActionIcon? = null,
 ) {
-    /** Меняется через [PluginScope.setPrefixes], парсер видит сразу. */
+    /** Меняется через [PluginTriggers.setPrefixes], парсер видит сразу. */
     @Volatile
     var prefixes: List<String> = prefixes
         internal set
@@ -53,4 +53,38 @@ class TriggerParser(private val triggers: StateFlow<List<Trigger>>) {
     }
 
     fun byId(id: String?): Trigger? = triggers.value.find { it.id == id }
+}
+
+/** Префиксы-команды плагина, `PluginScope.triggers`. */
+class PluginTriggers internal constructor(private val scope: PluginScope) {
+    /**
+     * Префикс-команда, например `add("Calculator", "calc", "=")`.
+     * Результаты для неё — `results.add(trigger) { ... }`.
+     */
+    fun add(
+        label: String,
+        vararg prefixes: String,
+        placeholder: String? = null,
+        icon: ActionIcon? = null,
+    ): Trigger =
+        Trigger(
+                scope.ownId(label),
+                label,
+                prefixes.toList(),
+                placeholder,
+                icon,
+            )
+            .also { scope.register { scope.host.addTrigger(it) } }
+
+    /**
+     * Заменить префиксы своего триггера, например из настроек плагина.
+     * Пустой список — триггер включается только через
+     * `setQuery(SearchQuery(text, trigger))`.
+     */
+    fun setPrefixes(trigger: Trigger, prefixes: List<String>) {
+        scope.requireOwn(trigger.id)
+        require(prefixes.none { it.isEmpty() }) { "Empty prefix" }
+        trigger.prefixes = prefixes.toList()
+        scope.host.warnTaken(trigger)
+    }
 }

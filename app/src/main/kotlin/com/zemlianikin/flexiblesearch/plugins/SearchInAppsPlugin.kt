@@ -211,7 +211,11 @@ class SearchInAppsPlugin : Plugin {
                         .toBitmap(iconSize, iconSize)
                         .asImageBitmap()
                 }
-            scope.quickAction(target.label, icon, id = target.packageName) {
+            scope.buttons.quickAction(
+                target.label,
+                icon,
+                id = target.packageName,
+            ) {
                 val intent =
                     target
                         .intent(query.text.trim())
@@ -234,7 +238,7 @@ class SearchInAppsPlugin : Plugin {
         order.value = frecency.ranking(labels)
 
         // С чипом строка — команда, а не запрос: Enter дальше.
-        scope.onSubmit { results, next ->
+        scope.results.onSubmit { results, next ->
             val text = query.text.trim()
             when {
                 results.items.isNotEmpty() ||
@@ -275,7 +279,7 @@ class SearchInAppsPlugin : Plugin {
         }
 
         val settings =
-            scope.screen(name) {
+            scope.screens.add(name) {
                 val hiddenPackages by hidden.packages.collectAsState()
                 // Сначала — какие были при установке плагина, потом —
                 // перечитанные: приложение могли поставить или удалить.
@@ -307,7 +311,7 @@ class SearchInAppsPlugin : Plugin {
                     }
                 }
             }
-        scope.onOpenSettings { open(settings) }
+        scope.screens.settings { open(settings) }
     }
 
     /**

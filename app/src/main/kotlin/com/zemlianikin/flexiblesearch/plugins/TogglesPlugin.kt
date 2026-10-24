@@ -55,7 +55,7 @@ class TogglesPlugin : Plugin {
                     .getCameraCharacteristics(it)
                     .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
             }
-        scope.widgetFlow {
+        scope.widgets.addFlow {
             val torch =
                 if (torchId != null) torchState(cameras, torchId)
                 else flowOf(null)

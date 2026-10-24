@@ -1,5 +1,6 @@
 package com.zemlianikin.flexiblesearch.plugins.converter.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,12 +32,14 @@ import com.zemlianikin.flexiblesearch.plugins.converter.ConverterSettings
 import com.zemlianikin.flexiblesearch.plugins.converter.prefixError
 
 /**
- * Экран настроек: кнопки в ряду и на главном экране, префиксы. Новые
- * префиксы — в [onPrefixesChange], он же сохраняет их в [settings].
+ * Экран настроек: кнопки в ряду и на главном экране, ярлык на рабочий стол
+ * ([onPin], если лаунчер умеет), префиксы. Новые префиксы — в
+ * [onPrefixesChange], он же сохраняет их в [settings].
  */
 @Composable
 internal fun SettingsContent(
     settings: ConverterSettings,
+    onPin: (() -> Unit)?,
     onPrefixesChange: (List<String>) -> Unit,
 ) {
     val quickAction by settings.quickAction.collectAsState()
@@ -68,6 +71,17 @@ internal fun SettingsContent(
                 homeScreenButton,
                 settings::setHomeScreenButton,
             )
+        }
+        if (onPin != null) {
+            item {
+                ListItem(
+                    headlineContent = { Text("Add to home screen") },
+                    supportingContent = {
+                        Text("Calculator icon, also in the app icon menu")
+                    },
+                    modifier = Modifier.clickable(onClick = onPin),
+                )
+            }
         }
         item {
             Text(

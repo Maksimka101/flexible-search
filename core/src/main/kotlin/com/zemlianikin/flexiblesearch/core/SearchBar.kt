@@ -70,7 +70,7 @@ data class SearchBarProps(
     /** Как рисовать текст, например подчеркнуть ошибку. */
     val visualTransformation: VisualTransformation =
         VisualTransformation.None,
-    /** Кнопки справа, `PluginScope.searchBarAction`. */
+    /** Кнопки справа, [PluginButtons.searchBar]. */
     val actions: List<QuickAction> = emptyList(),
     val onAction: (QuickAction) -> Unit = {},
 )

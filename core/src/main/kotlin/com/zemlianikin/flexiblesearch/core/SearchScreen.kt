@@ -127,6 +127,12 @@ fun SearchScreen(
                 val currentHost by rememberUpdatedState(host)
                 val currentScreens by rememberUpdatedState(screens)
                 LaunchedEffect(links) {
+                    // Плагин выключен — ссылка просто открывает поиск.
+                    fun run(id: String, action: Action?) {
+                        backStack.retainAll { it == SEARCH_ROUTE }
+                        if (action == null) Log.w(TAG, "No action $id")
+                        else action(currentActions)
+                    }
                     links.collect { uri ->
                         when (val link = SearchLinks.parse(uri)) {
                             is SearchLink.Search -> {
@@ -145,17 +151,20 @@ fun SearchScreen(
                                     backStack.last() != link.id ->
                                         backStack += link.id
                                 }
-                            is SearchLink.RunAction -> {
-                                backStack.retainAll { it == SEARCH_ROUTE }
-                                val button =
+                            is SearchLink.RunAction ->
+                                run(
+                                    link.id,
                                     currentHost.homeScreenButtons.value
-                                        .find {
-                                            it.id == link.id
-                                        }
-                                if (button == null)
-                                    Log.w(TAG, "No button ${link.id}")
-                                else button.action(currentActions)
-                            }
+                                        .find { it.id == link.id }
+                                        ?.action,
+                                )
+                            is SearchLink.RunShortcut ->
+                                run(
+                                    link.id,
+                                    currentHost.shortcuts.value
+                                        .find { it.id == link.id }
+                                        ?.action,
+                                )
                             null -> Log.w(TAG, "Unknown link $uri")
                         }
                     }

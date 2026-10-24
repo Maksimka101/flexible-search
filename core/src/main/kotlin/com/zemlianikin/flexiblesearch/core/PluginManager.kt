@@ -30,6 +30,7 @@ class PluginManager(context: Context, val plugins: List<Plugin>) {
 
     init {
         SearchWidget.watch(context, this)
+        Shortcuts.watch(context, this)
     }
 
     /**

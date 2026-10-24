@@ -29,8 +29,8 @@ const val SETTINGS_SCREEN = "settings"
 
 /**
  * Настройки: строки хоста ([header]), потом все плагины — выключить или
- * открыть их настройки ([PluginScope.onOpenSettings]). Своё у плагина
- * только у включённого: выключенный не установлен.
+ * открыть их настройки ([PluginScreens.settings]). Своё у плагина только у
+ * включённого: выключенный не установлен.
  */
 internal fun settingsScreen(
     plugins: PluginManager,

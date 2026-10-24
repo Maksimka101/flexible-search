@@ -28,16 +28,18 @@ internal object WebSuggestionsMock {
     fun install(scope: PluginScope) {
         val icon = ActionIcon.Vector(WebIcon)
         val web =
-            scope.trigger(
+            scope.triggers.add(
                 "Web",
                 "web",
                 placeholder = "Search the web",
                 icon = icon,
             )
-        scope.results(title = "Web", icon = icon, fullList = web) {
+        scope.results.add(title = "Web", icon = icon, fullList = web) {
             suggestions(it)
         }
-        scope.results(web, title = "Web", icon = icon) { suggestions(it) }
+        scope.results.add(web, title = "Web", icon = icon) {
+            suggestions(it)
+        }
     }
 
     private suspend fun ResultsBuilder.suggestions(query: String) {

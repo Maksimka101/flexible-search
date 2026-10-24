@@ -9,11 +9,13 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   (внешние плагины подключат её `compileOnly`). Система компонентов (`Component`,
   `style`/`override`), DSL результатов, префиксы-триггеры с чипом, ряд быстрых
   действий и кнопки в строке поиска, виджеты пустой строки
-  (`widget`/`widgetFlow`), экраны плагинов (`screen`, Navigation 3; переходы и «назад» — `ScreenStack`), `NameMatcher`
+  (`widgets`), экраны плагинов (`screens`, Navigation 3; переходы и «назад» — `ScreenStack`), `NameMatcher`
   (fuzzy + раскладка + транслит), диплинки `SearchLinks`, настройки
   (`PluginManager` — выключенные плагины; шестерёнка в строке и экран, где
-  плагины выключаются и открываются их `onOpenSettings`), виджет строки
-  поиска на главный экран с кнопками плагинов (`homeScreenButton`) и сервисы для плагинов в `PluginScope`:
+  плагины выключаются и открываются их `screens.settings`), виджет строки
+  поиска на главный экран с кнопками плагинов и ярлыки плагинов (`launcher`). `PluginScope`: сервисы
+  и вид плоско, остальное группами по фичам (`triggers`, `results`, `widgets`,
+  `buttons`, `launcher`, `screens`; классы `Plugin<Группа>` в файлах фич). Сервисы:
   `prefs` (свой SharedPreferences), `http` (общий OkHttp с кэшем), `json`
   (kotlinx.serialization).
 - `app/` — хост (`com.zemlianikin.flexiblesearch`) и встроенные плагины в `plugins/`

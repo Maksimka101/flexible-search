@@ -3,11 +3,8 @@ package com.zemlianikin.flexiblesearch.core
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
-import androidx.compose.runtime.Composable
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -29,13 +26,17 @@ interface Plugin {
     fun install(scope: PluginScope)
 }
 
-/** Всё, что плагин может сделать при установке. */
+/**
+ * Всё, что плагин может сделать при установке. Сервисы и вид — прямо здесь,
+ * остальное по фичам: [triggers], [results], [widgets], [buttons],
+ * [launcher], [screens].
+ */
 class PluginScope
 internal constructor(
-    private val pluginId: String,
+    internal val pluginId: String,
     /** Контекст приложения: живёт дольше окна поиска. */
     val context: Context,
-    private val host: PluginHost,
+    internal val host: PluginHost,
 ) {
     // До конца install регистрации копятся: упавший плагин не оставляет
     // половины. После — применяются сразу: плагин может добавить виджет
@@ -43,7 +44,7 @@ internal constructor(
     private var pending: MutableList<() -> Unit>? = mutableListOf()
     private var discarded = false
 
-    private fun register(add: () -> Unit): Unit =
+    internal fun register(add: () -> Unit): Unit =
         synchronized(this) {
             val queue = pending
             if (queue != null) queue += add else if (!discarded) add()
@@ -61,6 +62,17 @@ internal constructor(
             pending = null
             discarded = true
         }
+
+    /** Полный id того, что регистрирует плагин: `плагин/id`. */
+    internal fun ownId(id: String) = "$pluginId/$id"
+
+    /** Менять можно только своё: триггеры, ярлыки. */
+    internal fun requireOwn(id: String) =
+        require(id.startsWith("$pluginId/")) {
+            "$id does not belong to $pluginId"
+        }
+
+    // --- Сервисы ---
 
     /**
      * Ключ-значение плагина: свой файл, не пересекается с другими
@@ -90,15 +102,7 @@ internal constructor(
     val json: Json
         get() = host.services.json
 
-    /**
-     * Сколько провайдер может отвечать на запрос, потом — отмена. Одно
-     * значение на всех: поменял один плагин — поменялось для всех.
-     */
-    var providerTimeLimitMs: Long
-        get() = host.services.providerTimeLimitMs
-        set(value) {
-            host.services.providerTimeLimitMs = value
-        }
+    // --- Вид ---
 
     /** Поменять вид: `style(SearchBar) { it.copy(height = 64.dp) }`. */
     fun <P, S> style(
@@ -117,219 +121,27 @@ internal constructor(
         override: ComponentOverride<P, S>,
     ) = register { host.components.addOverride(component, override) }
 
-    /**
-     * Префикс-команда, например `trigger("Calculator", "calc", "=")`.
-     * Результаты для неё — `results(trigger) { ... }`.
-     */
-    fun trigger(
-        label: String,
-        vararg prefixes: String,
-        placeholder: String? = null,
-        icon: ActionIcon? = null,
-    ): Trigger =
-        Trigger(
-                "$pluginId/$label",
-                label,
-                prefixes.toList(),
-                placeholder,
-                icon,
-            )
-            .also { register { host.addTrigger(it) } }
+    // --- Фичи ---
 
-    /**
-     * Заменить префиксы своего [trigger], например из настроек плагина.
-     * Пустой список — триггер включается только через
-     * `setQuery(SearchQuery(text, trigger))`.
-     */
-    fun setPrefixes(trigger: Trigger, prefixes: List<String>) {
-        require(trigger.id.startsWith("$pluginId/")) {
-            "${trigger.id} is not a trigger of $pluginId"
-        }
-        require(prefixes.none { it.isEmpty() }) { "Empty prefix" }
-        trigger.prefixes = prefixes.toList()
-        host.warnTaken(trigger)
-    }
+    /** Префиксы-команды с чипом в строке: `calc 2+2`, `=2+2`. */
+    val triggers = PluginTriggers(this)
 
-    /**
-     * Показывать результаты без Compose, один ответ на запрос:
-     * ```
-     * results(title = "Files") { query ->
-     *     item(file.name, id = file.path) { ... }
-     * }
-     * ```
-     *
-     * Без [trigger] — на любую непустую строку без префикса, с [onEmpty] —
-     * и на пустую (недавние, предложенные); с ним — только на `префикс
-     * остаток`, остаток может быть пустым. Результаты провайдера — одна
-     * группа с заголовком [title], до 3 строк; [fullList] — триггер, где
-     * видна вся группа. При каждом открытии окна провайдер получает текущий
-     * запрос заново.
-     */
-    fun results(
-        trigger: Trigger? = null,
-        title: String? = null,
-        icon: ActionIcon? = null,
-        fullList: Trigger? = null,
-        onEmpty: Boolean = false,
-        provide: suspend ResultsBuilder.(query: String) -> Unit,
-    ) {
-        resultsFlow(
-            trigger,
-            title,
-            icon,
-            fullList,
-            onEmpty,
-            singleResult(provide),
-        )
-    }
+    /** Результаты на запрос и Enter в строке поиска. */
+    val results = PluginResults(this)
 
-    /**
-     * Несколько ответов на запрос, каждый — полный список:
-     * ```
-     * resultsFlow { query ->
-     *     flow {
-     *         emit(buildResults { item(cached, id = ...) { ... } })
-     *         emit(buildResults { item(fresh, id = ...) { ... } })
-     *     }
-     * }
-     * ```
-     */
-    fun resultsFlow(
-        trigger: Trigger? = null,
-        title: String? = null,
-        icon: ActionIcon? = null,
-        fullList: Trigger? = null,
-        onEmpty: Boolean = false,
-        provide: ResultProvider,
-    ) {
-        val provider =
-            RegisteredProvider(
-                pluginId,
-                trigger,
-                title,
-                fullList,
-                provide,
-                icon,
-                onEmpty,
-            )
-        register { host.providerList.update { it + provider } }
-    }
+    /** Виджеты на пустой строке: погода, переключатели. */
+    val widgets = PluginWidgets(this)
 
-    /** Кнопка в ряду под результатами, видна всегда. */
-    fun quickAction(
-        label: String,
-        icon: ActionIcon,
-        id: String = label,
-        isSelected: (SearchQuery) -> Boolean = { false },
-        action: Action,
-    ) {
-        val quickAction =
-            QuickAction("$pluginId/$id", label, icon, isSelected, action)
-        register { host.quickActionList.update { it + quickAction } }
-    }
+    /** Кнопки в окне поиска: ряд под результатами и строка поиска. */
+    val buttons = PluginButtons(this)
 
-    /**
-     * Обработать Enter в строке поиска или передать дальше. Внутри всех —
-     * запуск первого результата; позже зарегистрированный — снаружи, как у
-     * [override]:
-     * ```
-     * onSubmit { results, next ->
-     *     if (results.items.isEmpty()) webSearch(query.text) else next()
-     * }
-     * ```
-     */
-    fun onSubmit(handler: SubmitHandler) = register {
-        host.submitHandlerList.update { it + handler }
-    }
+    /** Вне окна: кнопки виджета на главном экране и ярлыки. */
+    val launcher = PluginLauncher(this)
 
-    /** Кнопка-иконка справа в строке поиска; [label] — для TalkBack. */
-    fun searchBarAction(
-        label: String,
-        icon: ActionIcon,
-        id: String = label,
-        action: Action,
-    ) {
-        val quickAction =
-            QuickAction("$pluginId/$id", label, icon, { false }, action)
-        register { host.searchBarActionList.update { it + quickAction } }
-    }
+    /** Свои экраны поверх поиска и настройки плагина. */
+    val screens = PluginScreens(this)
 
-    /**
-     * Кнопка справа от строки в виджете поиска на главном экране, по
-     * порядку плагинов. Тап открывает окно поиска и выполняет [action].
-     * [visible] — например настройка плагина: виджет перерисуется сам.
-     *
-     * ```
-     * homeScreenButton("Calculator", icon) {
-     *     setQuery(SearchQuery("", calc))
-     * }
-     * ```
-     */
-    fun homeScreenButton(
-        label: String,
-        icon: ActionIcon,
-        id: String = label,
-        visible: StateFlow<Boolean> = MutableStateFlow(true),
-        action: Action,
-    ) {
-        val button =
-            HomeScreenButton("$pluginId/$id", label, icon, visible, action)
-        register { host.homeScreenButtonList.update { it + button } }
-    }
-
-    /**
-     * Свой экран поверх поиска, с заголовком [title] и «назад»:
-     * ```
-     * val settings = screen("Settings") { Text("...") }
-     * quickAction("Settings", icon) { open(settings) }
-     * ```
-     */
-    fun screen(
-        title: String,
-        id: String = title,
-        content: @Composable ScreenScope.() -> Unit,
-    ): Screen =
-        Screen("$pluginId/$id", title, content).also { screen ->
-            register {
-                host.screenMap.update { it + (screen.id to screen) }
-            }
-        }
-
-    /**
-     * Виджет на пустой строке без префикса, один ответ при открытии окна:
-     * ```
-     * widget { card("+12°", "Cloudy", id = "now") { ... } }
-     * ```
-     *
-     * Как группа результатов с заголовком [title], но видны все строки.
-     * Пустой список — виджета нет.
-     */
-    fun widget(
-        title: String? = null,
-        icon: ActionIcon? = null,
-        provide: suspend ResultsBuilder.() -> Unit,
-    ) {
-        widgetFlow(title, icon) {
-            flow {
-                emit(ResultsBuilder().apply { provide() }.items.toList())
-            }
-        }
-    }
-
-    /**
-     * Живой виджет: каждый `emit` — полный список, пустой прячет виджет.
-     * Поток собирается, пока окно поиска на экране, и запускается заново
-     * при каждом открытии — это и есть обновление. Кэш, если нужен, держит
-     * сам плагин.
-     */
-    fun widgetFlow(
-        title: String? = null,
-        icon: ActionIcon? = null,
-        provide: () -> Flow<List<ResultItem>>,
-    ) {
-        val widget = RegisteredWidget(pluginId, title, icon, provide)
-        register { host.widgetList.update { it + widget } }
-    }
+    // --- Жизненный цикл ---
 
     /**
      * Окно поиска открылось, и в первый раз тоже. Сразу после этого
@@ -339,18 +151,6 @@ internal constructor(
      */
     fun onOpen(action: () -> Unit) {
         register { host.openList.update { it + (pluginId to action) } }
-    }
-
-    /**
-     * Нажатие на плагин в списке плагинов; без него строка только выключает
-     * плагин. Обычно — свой экран:
-     * ```
-     * val settings = screen("Settings") { ... }
-     * onOpenSettings { open(settings) }
-     * ```
-     */
-    fun onOpenSettings(action: ScreenScope.() -> Unit) = register {
-        host.settingsMap.update { it + (pluginId to action) }
     }
 }
 
@@ -373,6 +173,7 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
         MutableStateFlow(emptyList<SubmitHandler>())
     internal val homeScreenButtonList =
         MutableStateFlow(emptyList<HomeScreenButton>())
+    internal val shortcutList = MutableStateFlow(emptyList<Shortcut>())
     internal val widgetList =
         MutableStateFlow(emptyList<RegisteredWidget>())
     internal val screenMap = MutableStateFlow(emptyMap<String, Screen>())
@@ -388,13 +189,12 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
     val widgets = WidgetEngine(widgetList)
     val homeScreenButtons: StateFlow<List<HomeScreenButton>> =
         homeScreenButtonList
+    val shortcuts: StateFlow<List<Shortcut>> = shortcutList
 
     /** Экраны плагинов по [Screen.id]. */
     val screens: StateFlow<Map<String, Screen>> = screenMap
 
-    /**
-     * Открыть настройки плагина по его id: [PluginScope.onOpenSettings].
-     */
+    /** Открыть настройки плагина по его id: [PluginScreens.settings]. */
     val settings: StateFlow<Map<String, ScreenScope.() -> Unit>> =
         settingsMap
 
@@ -426,7 +226,7 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
         }
     }
 
-    /** Enter в строке поиска: см. [PluginScope.onSubmit]. */
+    /** Enter в строке поиска: см. [PluginResults.onSubmit]. */
     fun submit(scope: ActionScope, results: SearchState) =
         submitChain(submitHandlerList.value, scope, results)
 

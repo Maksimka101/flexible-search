@@ -78,7 +78,7 @@ class AppsPlugin : Plugin {
         // Список перечитывается при каждом открытии: ничего не пропустит,
         // даже если система не сообщила об изменении.
         scope.onOpen { index.reload(ifIdle = true) }
-        scope.resultsFlow(onEmpty = true) { query ->
+        scope.results.addFlow(onEmpty = true) { query ->
             flow {
                 // Сразу — прежний список, потом — перечитанный, если он
                 // ещё читается.

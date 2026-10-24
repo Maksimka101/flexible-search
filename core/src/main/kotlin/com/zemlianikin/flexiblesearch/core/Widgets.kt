@@ -7,6 +7,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -118,5 +120,43 @@ class WidgetEngine(
 
     private companion object {
         const val TAG = "WidgetEngine"
+    }
+}
+
+/** Виджеты плагина на пустой строке, `PluginScope.widgets`. */
+class PluginWidgets internal constructor(private val scope: PluginScope) {
+    /**
+     * Виджет на пустой строке без префикса, один ответ при открытии окна:
+     * ```
+     * add { card("+12°", "Cloudy", id = "now") { ... } }
+     * ```
+     *
+     * Как группа результатов с заголовком [title], но видны все строки.
+     * Пустой список — виджета нет.
+     */
+    fun add(
+        title: String? = null,
+        icon: ActionIcon? = null,
+        provide: suspend ResultsBuilder.() -> Unit,
+    ) =
+        addFlow(title, icon) {
+            flow {
+                emit(ResultsBuilder().apply { provide() }.items.toList())
+            }
+        }
+
+    /**
+     * Живой виджет: каждый `emit` — полный список, пустой прячет виджет.
+     * Поток собирается, пока окно поиска на экране, и запускается заново
+     * при каждом открытии — это и есть обновление. Кэш, если нужен, держит
+     * сам плагин.
+     */
+    fun addFlow(
+        title: String? = null,
+        icon: ActionIcon? = null,
+        provide: () -> Flow<List<ResultItem>>,
+    ) {
+        val widget = RegisteredWidget(scope.pluginId, title, icon, provide)
+        scope.register { scope.host.widgetList.update { it + widget } }
     }
 }

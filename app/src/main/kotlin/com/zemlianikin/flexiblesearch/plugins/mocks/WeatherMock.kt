@@ -40,7 +40,7 @@ internal object WeatherMock {
         )
 
     fun install(scope: PluginScope) {
-        scope.widget {
+        scope.widgets.add {
             custom("now") {
                 Weather("+12°", "Cloudy · feels like +9°", hours) {
                     val intent =

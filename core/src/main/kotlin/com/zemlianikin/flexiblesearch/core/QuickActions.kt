@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.update
 
 /** Иконка без Compose-кода: значок приложения или векторная. */
 sealed interface ActionIcon {
@@ -138,3 +139,35 @@ val QuickActionButton =
             }
         }
     }
+
+/** Кнопки плагина в окне поиска, `PluginScope.buttons`. */
+class PluginButtons internal constructor(private val scope: PluginScope) {
+    /** Кнопка в ряду под результатами, видна всегда. */
+    fun quickAction(
+        label: String,
+        icon: ActionIcon,
+        id: String = label,
+        isSelected: (SearchQuery) -> Boolean = { false },
+        action: Action,
+    ) {
+        val button =
+            QuickAction(scope.ownId(id), label, icon, isSelected, action)
+        scope.register {
+            scope.host.quickActionList.update { it + button }
+        }
+    }
+
+    /** Кнопка-иконка справа в строке поиска; [label] — для TalkBack. */
+    fun searchBar(
+        label: String,
+        icon: ActionIcon,
+        id: String = label,
+        action: Action,
+    ) {
+        val button =
+            QuickAction(scope.ownId(id), label, icon, { false }, action)
+        scope.register {
+            scope.host.searchBarActionList.update { it + button }
+        }
+    }
+}

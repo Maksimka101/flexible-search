@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.zemlianikin.flexiblesearch.core.Action
 import com.zemlianikin.flexiblesearch.core.ActionIcon
 import com.zemlianikin.flexiblesearch.core.ActionScope
 import com.zemlianikin.flexiblesearch.core.LocalActionScope
@@ -94,13 +95,13 @@ class ConverterPlugin : Plugin {
             )
         val icon = ActionIcon.Vector(CalculatorIcon)
         val trigger =
-            scope.trigger(
+            scope.triggers.add(
                 "Calculator",
                 *settings.prefixes.value.toTypedArray(),
                 placeholder = "10 usd - 10% to eur",
                 icon = icon,
             )
-        scope.quickAction(
+        scope.buttons.quickAction(
             "Calculator",
             icon,
             id = QUICK_ACTION,
@@ -110,13 +111,19 @@ class ConverterPlugin : Plugin {
             if (query.trigger == trigger) setQuery(SearchQuery(query.text))
             else setQuery(SearchQuery(query.text, trigger))
         }
-        scope.homeScreenButton(
+        val openCalculator: Action = { setQuery(SearchQuery("", trigger)) }
+        scope.launcher.widgetButton(
             "Calculator",
             icon,
             visible = settings.homeScreenButton,
-        ) {
-            setQuery(SearchQuery("", trigger))
-        }
+            action = openCalculator,
+        )
+        val shortcut =
+            scope.launcher.shortcut(
+                "Calculator",
+                icon,
+                action = openCalculator,
+            )
         val quickActionId = "$id/$QUICK_ACTION"
         scope.override(QuickActions) { props, style, original ->
             val visible by settings.quickAction.collectAsState()
@@ -132,13 +139,19 @@ class ConverterPlugin : Plugin {
                 )
         }
         val settingsScreen =
-            scope.screen(name) {
-                SettingsContent(settings) {
+            scope.screens.add(name) {
+                SettingsContent(
+                    settings,
+                    onPin =
+                        if (scope.launcher.canPin) {
+                            { scope.launcher.pin(shortcut) }
+                        } else null,
+                ) {
                     settings.setPrefixes(it)
-                    scope.setPrefixes(trigger, it)
+                    scope.triggers.setPrefixes(trigger, it)
                 }
             }
-        scope.onOpenSettings { open(settingsScreen) }
+        scope.screens.settings { open(settingsScreen) }
 
         // Состояние экрана живёт в окне, а не в строке поиска: его читают
         // и поле ввода, и numpad, и результаты.
@@ -271,14 +284,14 @@ class ConverterPlugin : Plugin {
             }
         }
 
-        scope.results { query ->
+        scope.results.add { query ->
             val snapshot = repository.state.value.cached?.snapshot
             val rates =
                 snapshot?.toTable() ?: RateTable(today(), emptyMap())
             val ok =
                 calculator.calculate(query, rates) as? Calculation.Ok
-                    ?: return@results
-            if (!worthShowing(query, ok)) return@results
+                    ?: return@add
+            if (!worthShowing(query, ok)) return@add
             val format = ValueFormatter()
             val value = format.value(ok.value)
             val money = ok.value as? Value.Money

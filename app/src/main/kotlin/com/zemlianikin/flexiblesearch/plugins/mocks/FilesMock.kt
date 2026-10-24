@@ -81,17 +81,17 @@ internal object FilesMock {
     fun install(scope: PluginScope) {
         val icon = ActionIcon.Vector(FolderIcon)
         val all =
-            scope.trigger(
+            scope.triggers.add(
                 "Files",
                 "files",
                 placeholder = "File name",
                 icon = icon,
             )
         val context = scope.context
-        scope.results(title = "Files", icon = icon, fullList = all) {
+        scope.results.add(title = "Files", icon = icon, fullList = all) {
             found(context, it)
         }
-        scope.results(all, title = "Files", icon = icon) { query ->
+        scope.results.add(all, title = "Files", icon = icon) { query ->
             // С префиксом и без текста — последние файлы.
             if (query.isBlank()) {
                 for (file in files.sortedBy { it.daysAgo }) {

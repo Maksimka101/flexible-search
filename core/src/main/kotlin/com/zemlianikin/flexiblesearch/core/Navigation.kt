@@ -55,10 +55,11 @@ import androidx.navigationevent.NavigationEventHandler
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
+import kotlinx.coroutines.flow.update
 
 /**
  * Экран плагина поверх поиска: настройки, подробности. Регистрируется через
- * `PluginScope.screen`, открывается [Navigator.open]; «назад» возвращает на
+ * [PluginScreens.add], открывается [Navigator.open]; «назад» возвращает на
  * предыдущий.
  */
 class Screen
@@ -379,3 +380,36 @@ private val BackIcon: ImageVector =
         "Back",
         "M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z",
     )
+
+/** Экраны плагина и его настройки, `PluginScope.screens`. */
+class PluginScreens internal constructor(private val scope: PluginScope) {
+    /**
+     * Свой экран поверх поиска, с заголовком [title] и «назад»:
+     * ```
+     * val details = screens.add("Details") { Text("...") }
+     * buttons.quickAction("Details", icon) { open(details) }
+     * ```
+     */
+    fun add(
+        title: String,
+        id: String = title,
+        content: @Composable ScreenScope.() -> Unit,
+    ): Screen =
+        Screen(scope.ownId(id), title, content).also { screen ->
+            scope.register {
+                scope.host.screenMap.update { it + (screen.id to screen) }
+            }
+        }
+
+    /**
+     * Нажатие на плагин в списке плагинов; без него строка только выключает
+     * плагин. Обычно — свой экран:
+     * ```
+     * val settings = screens.add("Settings") { ... }
+     * screens.settings { open(settings) }
+     * ```
+     */
+    fun settings(action: ScreenScope.() -> Unit) = scope.register {
+        scope.host.settingsMap.update { it + (scope.pluginId to action) }
+    }
+}
