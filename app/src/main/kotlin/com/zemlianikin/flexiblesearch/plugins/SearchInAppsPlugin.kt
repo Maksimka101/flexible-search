@@ -10,24 +10,46 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.graphics.drawable.toBitmap
 import com.zemlianikin.flexiblesearch.core.ActionIcon
 import com.zemlianikin.flexiblesearch.core.Plugin
 import com.zemlianikin.flexiblesearch.core.PluginScope
+import com.zemlianikin.flexiblesearch.core.QuickAction
 import com.zemlianikin.flexiblesearch.core.QuickActions
 import com.zemlianikin.flexiblesearch.core.QuickActionsProps
 import kotlin.math.pow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
 
 /**
  * Ряд «искать в…»: строка уходит в веб-поиск, чаты, карты, магазины и
  * встроенный поиск приложений. Кнопка показывается, только если приложение
- * установлено, включено и принимает такой интент. Enter без результатов —
- * веб-поиск в браузере по умолчанию.
+ * установлено, включено и принимает такой интент, и не скрыта в настройках
+ * плагина. Enter без результатов — веб-поиск в браузере по умолчанию.
  */
 class SearchInAppsPlugin : Plugin {
     override val id = "search-in-apps"
@@ -167,6 +189,7 @@ class SearchInAppsPlugin : Plugin {
 
     override fun install(scope: PluginScope) {
         val frecency = Frecency(scope.prefs)
+        val hidden = HiddenTargets(scope.prefs)
         val handler = Handler(Looper.getMainLooper())
         val labels = mutableListOf<String>()
         // Подписи кнопок по убыванию frecency.
@@ -174,10 +197,12 @@ class SearchInAppsPlugin : Plugin {
         val packageManager = scope.context.packageManager
         val iconSize =
             (28 * scope.context.resources.displayMetrics.density).toInt()
+        val available = mutableSetOf<String>()
         for (target in targets) {
             // Активити ищется один раз при установке плагина, иконка —
             // в фоне при первом показе.
             val component = resolve(packageManager, target) ?: continue
+            available += target.packageName
             val icon =
                 ActionIcon.Lazy("$id/${target.packageName}") {
                     packageManager
@@ -185,7 +210,7 @@ class SearchInAppsPlugin : Plugin {
                         .toBitmap(iconSize, iconSize)
                         .asImageBitmap()
                 }
-            scope.quickAction(target.label, icon) {
+            scope.quickAction(target.label, icon, id = target.packageName) {
                 val intent =
                     target
                         .intent(query.text.trim())
@@ -222,23 +247,133 @@ class SearchInAppsPlugin : Plugin {
         val prefix = "$id/"
         scope.override(QuickActions) { props, style, original ->
             val ranking by order.collectAsState()
+            val hiddenPackages by hidden.packages.collectAsState()
             val rank =
                 ranking.withIndex().associate { it.value to it.index }
+            val labels = targets.associate { it.packageName to it.label }
+            fun isHidden(action: QuickAction) =
+                action.id.removePrefix(prefix) in hiddenPackages
             val own =
                 props.actions
-                    .filter { it.id.startsWith(prefix) }
-                    .sortedBy { rank[it.id.removePrefix(prefix)] }
+                    .filter { it.id.startsWith(prefix) && !isHidden(it) }
+                    .sortedBy { rank[labels[it.id.removePrefix(prefix)]] }
                     .iterator()
             // Свои кнопки занимают свои же места, чужие стоят как стояли.
             val actions =
-                props.actions.map {
-                    if (it.id.startsWith(prefix)) own.next() else it
+                props.actions.mapNotNull {
+                    when {
+                        !it.id.startsWith(prefix) -> it
+                        isHidden(it) -> null
+                        else -> own.next()
+                    }
                 }
             original(
                 QuickActionsProps(actions, props.query, props.onClick),
                 style,
             )
         }
+
+        val settings =
+            scope.screen(name) {
+                val hiddenPackages by hidden.packages.collectAsState()
+                // Сначала — какие были при установке плагина, потом —
+                // перечитанные: приложение могли поставить или удалить.
+                val installed by
+                    produceState<Set<String>>(available) {
+                        value =
+                            withContext(Dispatchers.IO) {
+                                targets
+                                    .filter {
+                                        resolve(packageManager, it) != null
+                                    }
+                                    .map { it.packageName }
+                                    .toSet()
+                            }
+                    }
+                LazyColumn {
+                    items(
+                        targets.sortedBy { it.packageName !in installed },
+                        key = { it.packageName },
+                    ) { target ->
+                        TargetRow(
+                            target,
+                            installed = target.packageName in installed,
+                            visible = target.packageName !in hiddenPackages,
+                            packageManager,
+                        ) {
+                            hidden.set(target.packageName, hidden = !it)
+                        }
+                    }
+                }
+            }
+        scope.onOpenSettings { open(settings) }
+    }
+
+    /**
+     * Цель в настройках. Неустановленная — тусклая и без значка, но скрыть
+     * можно и её: не появится, когда приложение поставят.
+     */
+    @Composable
+    private fun TargetRow(
+        target: Target,
+        installed: Boolean,
+        visible: Boolean,
+        packageManager: PackageManager,
+        onVisibleChange: (Boolean) -> Unit,
+    ) {
+        val iconSize = 40.dp
+        val size = with(LocalDensity.current) { iconSize.roundToPx() }
+        val icon by
+            produceState<ImageBitmap?>(
+                null,
+                target.packageName,
+                installed,
+            ) {
+                if (!installed) return@produceState
+                value =
+                    withContext(Dispatchers.IO) {
+                        try {
+                            packageManager
+                                .getApplicationIcon(target.packageName)
+                                .toBitmap(size, size)
+                                .asImageBitmap()
+                        } catch (e: PackageManager.NameNotFoundException) {
+                            null
+                        }
+                    }
+            }
+        val dimmed =
+            MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
+        ListItem(
+            leadingContent = {
+                val image = icon
+                if (image != null) {
+                    Image(image, null, Modifier.size(iconSize))
+                } else {
+                    Spacer(Modifier.size(iconSize))
+                }
+            },
+            headlineContent = { Text(target.label) },
+            supportingContent =
+                if (installed) null else ({ Text("Not installed") }),
+            trailingContent = {
+                // Нажатие обрабатывает вся строка.
+                Switch(checked = visible, onCheckedChange = null)
+            },
+            colors =
+                if (installed) ListItemDefaults.colors()
+                else
+                    ListItemDefaults.colors(
+                        headlineColor = dimmed,
+                        supportingColor = dimmed,
+                    ),
+            modifier =
+                Modifier.toggleable(
+                    value = visible,
+                    role = Role.Switch,
+                    onValueChange = onVisibleChange,
+                ),
+        )
     }
 
     /**
@@ -306,6 +441,29 @@ class SearchInAppsPlugin : Plugin {
 
     private companion object {
         const val REORDER_DELAY_MS = 1000L
+
+        /** Как у выключенного текста в Material 3. */
+        const val DISABLED_ALPHA = 0.38f
+    }
+}
+
+/** Скрытые в настройках цели, по пакету. */
+private class HiddenTargets(private val prefs: SharedPreferences) {
+    private val state =
+        MutableStateFlow(prefs.getStringSet(KEY, null).orEmpty().toSet())
+
+    val packages: StateFlow<Set<String>> = state
+
+    fun set(packageName: String, hidden: Boolean) {
+        val packages =
+            if (hidden) state.value + packageName
+            else state.value - packageName
+        prefs.edit { putStringSet(KEY, packages) }
+        state.value = packages
+    }
+
+    private companion object {
+        const val KEY = "hidden"
     }
 }
 

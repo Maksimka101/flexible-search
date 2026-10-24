@@ -7,8 +7,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import com.zemlianikin.flexiblesearch.core.PerfTrace
 import com.zemlianikin.flexiblesearch.core.SearchLinks
@@ -59,8 +57,9 @@ class SearchActivity : ComponentActivity() {
             app.wallpaper.bitmap.collect(background::show)
         }
         setContent {
-            val disabled by app.pluginSettings.disabled.collectAsState()
-            SearchScreen(app.host(disabled), window, linkFlow)
+            SearchScreen(app.plugins, window, linkFlow) {
+                WallpaperAccess()
+            }
         }
     }
 

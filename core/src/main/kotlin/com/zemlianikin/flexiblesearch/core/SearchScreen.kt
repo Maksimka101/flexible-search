@@ -42,17 +42,24 @@ private const val SEARCH_ROUTE = "search"
 private const val TAG = "SearchScreen"
 
 /**
- * Поиск и экраны плагинов поверх него. Сменился [host] (включили или
- * выключили плагин) — поиск начинается заново, открытые экраны остаются,
- * если их плагин на месте. [links] — [SearchLinks], каждая применяется один
- * раз.
+ * Поиск, экраны плагинов и настройки поверх него. Включили или выключили
+ * плагин — поиск начинается заново с новым хостом, открытые экраны
+ * остаются, если их плагин на месте. [links] — [SearchLinks], каждая
+ * применяется один раз. [settingsHeader] — строки хоста над списком
+ * плагинов в настройках.
  */
 @Composable
 fun SearchScreen(
-    host: PluginHost,
+    plugins: PluginManager,
     window: SearchWindow,
     links: Flow<Uri> = emptyFlow(),
+    settingsHeader: @Composable () -> Unit = {},
 ) {
+    val disabled by plugins.disabled.collectAsState()
+    val host = plugins.host(disabled)
+    val currentSettingsHeader = rememberUpdatedState(settingsHeader)
+    val settings =
+        remember(plugins) { settingsScreen(plugins, currentSettingsHeader) }
     CompositionLocalProvider(LocalComponents provides host.components) {
         SearchTheme(
             SearchThemeProps {
@@ -69,7 +76,8 @@ fun SearchScreen(
                     ) {
                         mutableStateListOf(SEARCH_ROUTE)
                     }
-                val screens by host.screens.collectAsState()
+                val pluginScreens by host.screens.collectAsState()
+                val screens = pluginScreens + (settings.id to settings)
                 LaunchedEffect(screens) {
                     backStack.retainAll {
                         it == SEARCH_ROUTE || it in screens
@@ -144,6 +152,7 @@ fun SearchScreen(
                                         window,
                                         navigator,
                                         queryState,
+                                        settings,
                                     )
                                 }
                             }
@@ -181,6 +190,7 @@ private fun Search(
     window: SearchWindow,
     navigator: Navigator,
     queryState: QueryState,
+    settings: Screen,
 ) {
     var text by queryState::text
     var triggerId by queryState::triggerId
@@ -231,6 +241,7 @@ private fun Search(
         rememberFirstFrame(thumbnailLoads) { searchState?.loading == false }
     val quickActions by host.quickActions.collectAsState()
     val searchBarActions by host.searchBarActions.collectAsState()
+    val settingsAction = remember(settings) { settingsAction(settings) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     // «Назад» сначала убирает чип, потом закрывает поиск.
@@ -266,7 +277,7 @@ private fun Search(
                             trigger = query.trigger,
                             onExitTrigger = { triggerId = null },
                             placeholder = query.trigger?.placeholder,
-                            actions = searchBarActions,
+                            actions = searchBarActions + settingsAction,
                             onAction = { it.action(actions) },
                         )
                     )

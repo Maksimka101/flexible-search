@@ -10,7 +10,9 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   `style`/`override`), DSL результатов, префиксы-триггеры с чипом, ряд быстрых
   действий и кнопки в строке поиска, виджеты пустой строки
   (`widget`/`widgetFlow`), экраны плагинов (`screen`, Navigation 3), `NameMatcher`
-  (fuzzy + раскладка + транслит), диплинки `SearchLinks`, виджет строки
+  (fuzzy + раскладка + транслит), диплинки `SearchLinks`, настройки
+  (`PluginManager` — выключенные плагины; шестерёнка в строке и экран, где
+  плагины выключаются и открываются их `onOpenSettings`), виджет строки
   поиска на главный экран и сервисы для плагинов в `PluginScope`:
   `prefs` (свой SharedPreferences), `http` (общий OkHttp с кэшем), `json`
   (kotlinx.serialization).
@@ -18,8 +20,8 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   (пишутся только через `PluginScope`, кроме виджетов главного экрана): поиск приложений
   (и по переводам названий), калькулятор и конвертер валют (`ca `, `=`;
   `plugins/converter/` — порт `~/develop/currency-converter` со своим нампадом),
-  «искать в…», фонарик и кнопки, цвета Material You (`style(SearchTheme)`). `SettingsPlugin` — невыключаемый
-  плагин хоста: шестерёнка в строке и экран, где плагины выключаются. `plugins/mocks/` — один
+  «искать в…» (в настройках плагина скрываются цели), фонарик и кнопки, цвета Material You
+  (`style(SearchTheme)`). `plugins/mocks/` — один
   `MocksPlugin` с моками веба, файлов и погоды. Фон окна — размытые обои хоста
   (`BlurredWallpaper`, `WallpaperBackground`), не плагин.
 - `poc/<имя>` — эксперименты: отдельный модуль со своим `applicationId`, ставится

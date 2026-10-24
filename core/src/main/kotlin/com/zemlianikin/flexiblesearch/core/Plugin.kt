@@ -303,6 +303,18 @@ internal constructor(
     fun onOpen(action: () -> Unit) {
         register { host.openList.update { it + (pluginId to action) } }
     }
+
+    /**
+     * Нажатие на плагин в списке плагинов; без него строка только выключает
+     * плагин. Обычно — свой экран:
+     * ```
+     * val settings = screen("Settings") { ... }
+     * onOpenSettings { open(settings) }
+     * ```
+     */
+    fun onOpenSettings(action: ScreenScope.() -> Unit) = register {
+        host.settingsMap.update { it + (pluginId to action) }
+    }
 }
 
 /**
@@ -327,6 +339,8 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
     internal val screenMap = MutableStateFlow(emptyMap<String, Screen>())
     internal val openList =
         MutableStateFlow(emptyList<Pair<String, () -> Unit>>())
+    internal val settingsMap =
+        MutableStateFlow(emptyMap<String, ScreenScope.() -> Unit>())
 
     val engine = SearchEngine(providerList) { services.providerTimeLimitMs }
     val triggers = TriggerParser(triggerList)
@@ -336,6 +350,12 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
 
     /** Экраны плагинов по [Screen.id]. */
     val screens: StateFlow<Map<String, Screen>> = screenMap
+
+    /**
+     * Открыть настройки плагина по его id: [PluginScope.onOpenSettings].
+     */
+    val settings: StateFlow<Map<String, ScreenScope.() -> Unit>> =
+        settingsMap
 
     init {
         for (plugin in plugins) {
