@@ -3,6 +3,7 @@ package com.zemlianikin.flexiblesearch.core
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -43,8 +44,11 @@ class AppRowProps(
 data class AppRowStyle(
     val containerColor: Color,
     val shape: Shape,
-    /** Сколько плиток видно сразу; остальные — прокруткой ряда. */
-    val visibleApps: Int,
+    /**
+     * Плитка не уже: в ряду столько, сколько влезает, и они делят ширину
+     * поровну. Остальные — прокруткой ряда.
+     */
+    val minTileWidth: Dp,
     /** Жёсткость пружины, с которой иконки едут и проявляются. */
     val animationStiffness: Float,
 )
@@ -56,7 +60,7 @@ val AppRow =
             AppRowStyle(
                 MaterialTheme.colorScheme.surfaceContainer,
                 RoundedCornerShape(24.dp),
-                visibleApps = 6,
+                minTileWidth = 68.dp,
                 animationStiffness = ResultAnimationStiffness,
             )
         },
@@ -68,32 +72,39 @@ val AppRow =
         ) {
             val apps = keyedApps(props.apps)
             val state = rememberLazyListState()
+            val padding = 8.dp
             // Новые результаты — ряд снова с начала, где цель Enter.
             LaunchedEffect(apps.map { it.first }) { state.scrollToItem(0) }
             // Ленивый ряд ради `animateItem`: иконка, оставшаяся в
             // результатах, едет на новое место, а не перескакивает.
-            LazyRow(
-                state = state,
-                contentPadding = PaddingValues(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                items(apps, key = { it.first }) { (_, app) ->
-                    AppIcon(
-                        AppIconProps(
-                            app,
-                            app == props.target,
-                            // Ширина места фиксирована: при 1–4 результатах
-                            // иконки не растягиваются.
-                            Modifier.fillParentMaxWidth(
-                                    1f / style.visibleApps
-                                )
-                                .then(
-                                    itemAnimation(style.animationStiffness)
-                                ),
-                        ) {
-                            props.onClick(app)
-                        }
-                    )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val tiles =
+                    ((maxWidth - padding * 2) / style.minTileWidth)
+                        .toInt()
+                        .coerceAtLeast(1)
+                LazyRow(
+                    state = state,
+                    contentPadding = PaddingValues(padding),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(apps, key = { it.first }) { (_, app) ->
+                        AppIcon(
+                            AppIconProps(
+                                app,
+                                app == props.target,
+                                // Ширина места от ширины ряда: при 1–4
+                                // результатах иконки не растягиваются.
+                                Modifier.fillParentMaxWidth(1f / tiles)
+                                    .then(
+                                        itemAnimation(
+                                            style.animationStiffness
+                                        )
+                                    ),
+                            ) {
+                                props.onClick(app)
+                            }
+                        )
+                    }
                 }
             }
         }
