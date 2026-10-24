@@ -49,6 +49,13 @@ class WidgetEngineTest {
     }
 
     @Test
+    fun noWidgetsIsReadyAtOnce() = runTest {
+        val state = engine().state().toList().single()
+        assertEquals(emptyList(), state.groups)
+        assertEquals(false, state.loading)
+    }
+
+    @Test
     fun emptyListHidesWidget() = runTest {
         val clipboard = {
             flow {

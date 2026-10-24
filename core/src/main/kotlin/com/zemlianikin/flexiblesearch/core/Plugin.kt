@@ -326,7 +326,9 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
             val scope =
                 PluginScope(plugin.id, context.applicationContext, this)
             try {
-                plugin.install(scope)
+                PerfTrace.section("install ${plugin.id}") {
+                    plugin.install(scope)
+                }
                 scope.commit()
             } catch (e: Throwable) {
                 scope.discard()
@@ -337,6 +339,7 @@ class PluginHost(context: Context, plugins: List<Plugin>) {
 
     /** Окно поиска открылось: см. [PluginScope.onOpen]. */
     fun windowOpened() {
+        PerfTrace.mark("window opened")
         for ((pluginId, action) in openList.value) {
             try {
                 action()

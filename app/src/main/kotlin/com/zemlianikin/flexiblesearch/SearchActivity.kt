@@ -10,9 +10,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
+import com.zemlianikin.flexiblesearch.core.PerfTrace
+import com.zemlianikin.flexiblesearch.core.SearchLinks
 import com.zemlianikin.flexiblesearch.core.SearchScreen
 import com.zemlianikin.flexiblesearch.core.SearchWindow
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
@@ -22,8 +27,9 @@ class SearchActivity : ComponentActivity() {
             override val context: Context
                 get() = this@SearchActivity
 
-            // Как обычное приложение: уходит в фон и остаётся в
-            // многозадачности со своей строкой.
+            // Как Pixel Search: окно поверх экрана, не в многозадачности.
+            // Уходит в фон живым: заново открывается без пересоздания,
+            // а прозрачное окно до первого кадра ничего не показывает.
             override fun close() {
                 moveTaskToBack(true)
             }
@@ -33,11 +39,15 @@ class SearchActivity : ComponentActivity() {
     private val links = Channel<Uri>(Channel.UNLIMITED)
     private val linkFlow = links.receiveAsFlow()
 
+    // Сброс строки, пока окно в фоне.
+    private var reset: Job? = null
+
     private val background by lazy {
         WallpaperBackground(getWindow(), windowManager)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        PerfTrace.mark("activity created")
         super.onCreate(savedInstanceState)
         // После пересоздания (складывание) intent тот же, ссылка уже
         // применена.
@@ -56,7 +66,19 @@ class SearchActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        reset?.cancel()
         (application as SearchApp).wallpaper.refresh()
+    }
+
+    // Вернулись быстро — строка та же, надолго ушли — пустая, как в
+    // Pixel Search. Сбрасывается в фоне, чтобы не тормозить открытие.
+    override fun onStop() {
+        super.onStop()
+        if (isChangingConfigurations) return
+        reset = lifecycleScope.launch {
+            delay(RESET_DELAY)
+            links.trySend(SearchLinks.search(""))
+        }
     }
 
     override fun onDestroy() {
@@ -67,5 +89,9 @@ class SearchActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.data?.let(links::trySend)
+    }
+
+    private companion object {
+        val RESET_DELAY = 15.seconds
     }
 }

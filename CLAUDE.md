@@ -43,3 +43,5 @@ Android-поиск в духе Pixel Search, где каждую часть UI �
   дисплеев — данные начинаются с `\x89PNG`.
   Без `-d` может снять чёрный неактивный дисплей: id — из
   `adb shell dumpsys SurfaceFlinger --display-id`, `screencap -d <id> -p`.
+- Скорость старта и открытия окна: `adb logcat -s PerfTrace` — метки в мс от запуска процесса
+  (`PerfTrace` в core), они же секции в Perfetto.

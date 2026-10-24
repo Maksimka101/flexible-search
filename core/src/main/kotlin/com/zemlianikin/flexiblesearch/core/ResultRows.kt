@@ -221,6 +221,11 @@ internal fun ActionIconImage(
             Image(icon.image, contentDescription, modifier)
         is ActionIcon.Vector ->
             Icon(icon.image, contentDescription, modifier, tint)
+        is ActionIcon.Lazy -> {
+            val image = rememberThumbnail(icon.key, icon.load)
+            if (image != null) Image(image, contentDescription, modifier)
+            else Spacer(modifier)
+        }
     }
 }
 

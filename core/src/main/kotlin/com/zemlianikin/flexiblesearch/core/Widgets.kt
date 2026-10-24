@@ -84,6 +84,8 @@ class WidgetEngine(
                     }
                     if (first == 0 && lists.any { it != null }) publish()
                 }
+                // Виджетов нет — сразу пусто и готово, а не тишина.
+                if (all.isEmpty() && started.isEmpty()) publish()
                 first
             }
             for (index in first until all.size) {

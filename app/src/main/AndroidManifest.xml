@@ -20,8 +20,10 @@
         android:theme="@style/Theme.Search">
         <activity
             android:name=".SearchActivity"
+            android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"
+            android:taskAffinity=""
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -75,8 +75,15 @@ fun SearchScreen(
                         it == SEARCH_ROUTE || it in screens
                     }
                 }
-                // Запрос из ссылки ждёт, пока поиск снова на экране.
-                var linkQuery by remember { mutableStateOf<String?>(null) }
+                // Запрос здесь, а не в Search: ссылка меняет его сразу,
+                // даже пока окно в фоне и кадров нет, — к открытию
+                // результаты уже готовы. Новый host — поиск заново.
+                val queryState =
+                    rememberSaveable(host, saver = QueryState.Saver) {
+                        QueryState()
+                    }
+                val currentQueryState by rememberUpdatedState(queryState)
+                val currentHost by rememberUpdatedState(host)
                 val currentScreens by rememberUpdatedState(screens)
                 LaunchedEffect(links) {
                     links.collect { uri ->
@@ -84,7 +91,11 @@ fun SearchScreen(
                             is SearchLink.Search -> {
                                 backStack.retainAll { it == SEARCH_ROUTE }
                                 if (link.query != null)
-                                    linkQuery = link.query
+                                    currentQueryState.set(
+                                        currentHost.triggers.parse(
+                                            link.query
+                                        )
+                                    )
                             }
                             is SearchLink.OpenScreen ->
                                 when {
@@ -132,10 +143,8 @@ fun SearchScreen(
                                         host,
                                         window,
                                         navigator,
-                                        linkQuery,
-                                    ) {
-                                        linkQuery = null
-                                    }
+                                        queryState,
+                                    )
                                 }
                             }
                         }
@@ -171,17 +180,13 @@ private fun Search(
     host: PluginHost,
     window: SearchWindow,
     navigator: Navigator,
-    linkQuery: String?,
-    onLinkQueryApplied: () -> Unit,
+    queryState: QueryState,
 ) {
-    // Сохраняется id триггера: чип переживает складывание экрана.
-    var text by rememberSaveable { mutableStateOf("") }
-    var triggerId by rememberSaveable {
-        mutableStateOf<String?>(null)
-    }
+    var text by queryState::text
+    var triggerId by queryState::triggerId
     val query = SearchQuery(text, host.triggers.byId(triggerId))
     val actions =
-        remember(window) {
+        remember(window, queryState) {
             object :
                 ActionScope,
                 SearchWindow by window,
@@ -194,18 +199,10 @@ private fun Search(
                         )
 
                 override fun setQuery(input: String) {
-                    val parsed = host.triggers.parse(input)
-                    triggerId = parsed.trigger?.id
-                    text = parsed.text
+                    queryState.set(host.triggers.parse(input))
                 }
             }
         }
-    LaunchedEffect(linkQuery) {
-        if (linkQuery != null) {
-            actions.setQuery(linkQuery)
-            onLinkQueryApplied()
-        }
-    }
     // Каждое открытие окна: плагины обновляют данные, а запрос
     // пересчитывается — пока окно скрыто, результаты устаревают.
     var opens by remember { mutableIntStateOf(0) }
@@ -230,9 +227,8 @@ private fun Search(
     val widgets = widgetState?.groups.orEmpty()
     val thumbnailLoads = remember { ThumbnailLoads() }
     val revealed =
-        rememberFirstFrame(thumbnailLoads) {
-            searchState?.loading == false && widgetState?.loading == false
-        }
+        // Виджеты первый кадр не ждёт: появляются, когда готовы.
+        rememberFirstFrame(thumbnailLoads) { searchState?.loading == false }
     val quickActions by host.quickActions.collectAsState()
     val searchBarActions by host.searchBarActions.collectAsState()
     val focusRequester = remember { FocusRequester() }
@@ -323,6 +319,28 @@ private fun Search(
     }
 }
 
+/**
+ * Запрос в строке. Хранит id триггера, а не сам триггер: чип переживает
+ * складывание экрана.
+ */
+private class QueryState(text: String = "", triggerId: String? = null) {
+    var text by mutableStateOf(text)
+    var triggerId by mutableStateOf(triggerId)
+
+    fun set(query: SearchQuery) {
+        triggerId = query.trigger?.id
+        text = query.text
+    }
+
+    companion object {
+        val Saver =
+            listSaver<QueryState, String?>(
+                { listOf(it.text, it.triggerId) },
+                { QueryState(it[0].orEmpty(), it[1]) },
+            )
+    }
+}
+
 /** Дольше первый кадр не ждёт: дальше — что успело. */
 private const val FIRST_FRAME_TIMEOUT_MS = 500L
 
@@ -344,6 +362,7 @@ private fun rememberFirstFrame(
             object : ViewTreeObserver.OnPreDrawListener {
                 override fun onPreDraw(): Boolean {
                     if (!revealed) return false
+                    PerfTrace.mark("first frame")
                     view.viewTreeObserver.removeOnPreDrawListener(this)
                     return true
                 }
@@ -354,12 +373,16 @@ private fun rememberFirstFrame(
         }
     }
     LaunchedEffect(Unit) {
-        withTimeoutOrNull(FIRST_FRAME_TIMEOUT_MS) {
-            snapshotFlow(ready).first { it }
-            // Кадр, чтобы строки с превью успели начать загрузку.
-            withFrameNanos {}
-            snapshotFlow { loads.pending }.first { it == 0 }
-        }
+        val loaded =
+            withTimeoutOrNull(FIRST_FRAME_TIMEOUT_MS) {
+                snapshotFlow(ready).first { it }
+                PerfTrace.mark("results ready")
+                // Кадр, чтобы строки с превью успели начать загрузку.
+                withFrameNanos {}
+                snapshotFlow { loads.pending }.first { it == 0 }
+                PerfTrace.mark("thumbnails loaded")
+            }
+        if (loaded == null) PerfTrace.mark("first frame timeout")
         revealed = true
     }
     return revealed

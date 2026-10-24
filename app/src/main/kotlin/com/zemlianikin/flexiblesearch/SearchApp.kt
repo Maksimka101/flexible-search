@@ -1,6 +1,7 @@
 package com.zemlianikin.flexiblesearch
 
 import android.app.Application
+import com.zemlianikin.flexiblesearch.core.PerfTrace
 import com.zemlianikin.flexiblesearch.core.PluginHost
 import com.zemlianikin.flexiblesearch.plugins.AppsPlugin
 import com.zemlianikin.flexiblesearch.plugins.MaterialYouPlugin
@@ -10,6 +11,11 @@ import com.zemlianikin.flexiblesearch.plugins.converter.ConverterPlugin
 import com.zemlianikin.flexiblesearch.plugins.mocks.MocksPlugin
 
 class SearchApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        PerfTrace.mark("app created")
+    }
+
     /** Все встроенные, и выключенные тоже. */
     val plugins =
         listOf(
@@ -51,8 +57,9 @@ class SearchApp : Application() {
         // Выгрузки пока нет: подписки старых плагинов остаются до конца
         // процесса.
         val enabled = plugins.filter { it.id !in disabled }
-        return PluginHost(this, listOf(settingsPlugin) + enabled).also {
-            built = disabled to it
-        }
+        return PerfTrace.section("plugin host") {
+                PluginHost(this, listOf(settingsPlugin) + enabled)
+            }
+            .also { built = disabled to it }
     }
 }

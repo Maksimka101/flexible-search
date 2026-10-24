@@ -29,6 +29,13 @@ sealed interface ActionIcon {
 
     /** Красится цветом содержимого, как Material-иконки. */
     class Vector(val image: ImageVector) : ActionIcon
+
+    /**
+     * Грузится в фоне при показе, как превью результатов: не держит
+     * установку плагина, а первый кадр окна её дожидается. [key] — ключ в
+     * кэше превью, уникальный: `плагин/что`.
+     */
+    class Lazy(val key: String, val load: ThumbnailLoader) : ActionIcon
 }
 
 /**

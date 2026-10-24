@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,6 +62,10 @@ class SearchInAppsPlugin : Plugin {
             .setType("text/plain")
             .putExtra(Intent.EXTRA_TEXT, query)
 
+    /** Поиск Samsung Finder: своё действие, запрос в экстре `query`. */
+    private fun finderSearch(action: String, query: String) =
+        Intent(action).putExtra("query", query)
+
     private val targets =
         listOf(
             Target("Web", "com.google.android.googlequicksearchbox") {
@@ -92,7 +98,6 @@ class SearchInAppsPlugin : Plugin {
             Target("Telegram", "org.telegram.messenger") {
                 view("tg://search?query=${Uri.encode(it)}")
             },
-            Target("Gmail", "com.google.android.gm") { search(it) },
             Target("Messages", "com.google.android.apps.messaging") {
                 search(it)
             },
@@ -111,16 +116,24 @@ class SearchInAppsPlugin : Plugin {
             Target("Reminder", "com.samsung.android.app.reminder") {
                 search(it)
             },
-            Target("Gallery", "com.sec.android.gallery3d") { search(it) },
-            Target("My Files", "com.sec.android.app.myfiles") {
-                search(it)
-            },
+            // Поиск, которым их открывает Samsung Finder.
             Target(
-                "Voice Recorder",
-                "com.sec.android.app.voicenote",
-                "com.sec.android.app.voicenote.main.VNMainActivity",
+                "Gallery",
+                "com.sec.android.gallery3d",
+                "com.samsung.android.gallery.app.activity.external" +
+                    ".GalleryExternalActivity",
             ) {
-                search(it)
+                finderSearch(
+                    "com.android.gallery.action" +
+                        ".SEARCH_FROM_GALAXY_FINDER_VIEW",
+                    it,
+                )
+            },
+            Target("My Files", "com.sec.android.app.myfiles") {
+                finderSearch(
+                    "com.sec.android.app.myfiles.FINDER_SEARCH_IN_APP",
+                    it,
+                )
             },
             Target(
                 "Settings",
@@ -129,33 +142,17 @@ class SearchInAppsPlugin : Plugin {
             ) {
                 search(it)
             },
-            Target("GitHub", "com.github.android") {
-                view("https://github.com/search?q=${Uri.encode(it)}")
-            },
             Target("Threads", "com.instagram.barcelona") {
                 view("https://www.threads.com/search?q=${Uri.encode(it)}")
             },
             Target("Bluesky", "xyz.blueskyweb.app") {
                 view("https://bsky.app/search?q=${Uri.encode(it)}")
             },
-            Target("Instagram", "com.instagram.android") {
-                view(
-                    "https://www.instagram.com/explore/search/keyword/" +
-                        "?q=${Uri.encode(it)}"
-                )
-            },
             Target("Steam", "com.valvesoftware.android.steam.community") {
                 view(
                     "https://store.steampowered.com/search/" +
                         "?term=${Uri.encode(it)}"
                 )
-            },
-            Target(
-                "T-Bank",
-                "com.idamob.tinkoff.android",
-                "ru.tinkoff.mb.payments.hub.ui.activity.PaymentsHubActivity",
-            ) {
-                search(it)
             },
             Target("Firefox", "org.mozilla.firefox") { webSearch(it) },
             Target("Chrome", "com.android.chrome") { webSearch(it) },
@@ -169,6 +166,7 @@ class SearchInAppsPlugin : Plugin {
 
     override fun install(scope: PluginScope) {
         val frecency = Frecency(scope.prefs)
+        val handler = Handler(Looper.getMainLooper())
         val labels = mutableListOf<String>()
         // Подписи кнопок по убыванию frecency.
         val order = MutableStateFlow(emptyList<String>())
@@ -176,15 +174,17 @@ class SearchInAppsPlugin : Plugin {
         val iconSize =
             (28 * scope.context.resources.displayMetrics.density).toInt()
         for (target in targets) {
-            // Активити и иконка ищутся один раз при установке плагина.
+            // Активити ищется один раз при установке плагина, иконка —
+            // в фоне при первом показе.
             val component = resolve(packageManager, target) ?: continue
-            val icon = packageManager.getApplicationIcon(target.packageName)
-            scope.quickAction(
-                target.label,
-                ActionIcon.Bitmap(
-                    icon.toBitmap(iconSize, iconSize).asImageBitmap()
-                ),
-            ) {
+            val icon =
+                ActionIcon.Lazy("$id/${target.packageName}") {
+                    packageManager
+                        .getApplicationIcon(target.packageName)
+                        .toBitmap(iconSize, iconSize)
+                        .asImageBitmap()
+                }
+            scope.quickAction(target.label, icon) {
                 val intent =
                     target
                         .intent(query.text.trim())
@@ -192,9 +192,14 @@ class SearchInAppsPlugin : Plugin {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 if (start(context, intent)) {
                     close()
-                    // После close: ряд перестраивается уже скрытым.
                     frecency.recordUsed(target.label)
-                    order.value = frecency.ranking(labels)
+                    // Ряд перестраивается, когда поиск уже скрылся за
+                    // запущенным приложением, иначе кажется, что нажата
+                    // соседняя кнопка.
+                    handler.postDelayed(
+                        { order.value = frecency.ranking(labels) },
+                        REORDER_DELAY_MS,
+                    )
                 }
             }
             labels += target.label
@@ -257,6 +262,10 @@ class SearchInAppsPlugin : Plugin {
             Log.e("SearchInAppsPlugin", "Can't start $intent", e)
             false
         }
+
+    private companion object {
+        const val REORDER_DELAY_MS = 1000L
+    }
 }
 
 /**

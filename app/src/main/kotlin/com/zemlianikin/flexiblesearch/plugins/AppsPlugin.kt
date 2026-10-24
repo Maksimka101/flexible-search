@@ -40,9 +40,9 @@ import kotlinx.serialization.json.Json
 
 /**
  * Приложения из лаунчера, включая рабочий профиль. Запуск закрывает поиск.
- * На пустой строке — недавно запущенные отсюда, а пока их меньше
- * [RecentApps.LIMIT] — все: недавние первыми, дальше по алфавиту. Находит и
- * по названию на другом языке: `настройки` — Settings.
+ * На пустой строке — все: недавно запущенные отсюда первыми, дальше по
+ * алфавиту; ряд показывает, сколько влезет, остальные — прокруткой. Находит
+ * и по названию на другом языке: `настройки` — Settings.
  */
 class AppsPlugin : Plugin {
     override val id = "apps"
@@ -62,8 +62,7 @@ class AppsPlugin : Plugin {
                 if (query.isNotBlank()) list.search(query)
                 else {
                     val recentApps = list.find(recent.keys())
-                    if (recentApps.size >= RecentApps.LIMIT) recentApps
-                    else recentApps + (list.sorted() - recentApps.toSet())
+                    recentApps + (list.sorted() - recentApps.toSet())
                 }
             return buildResults {
                 for (app in apps) {
@@ -180,8 +179,8 @@ private class RecentApps(private val prefs: SharedPreferences) {
     }
 
     companion object {
-        /** Хранится недавних; столько же — полная строка плиток. */
-        const val LIMIT = 5
+        /** Сколько недавних помнить; дальше — по алфавиту. */
+        const val LIMIT = 50
         private const val KEY = "recent"
     }
 }

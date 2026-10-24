@@ -7,5 +7,18 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowShowWallpaper">true</item>
         <item name="android:windowBackground">@color/wallpaper_scrim_blurred</item>
+        <!-- Окно поверх текущего экрана, как диалог: под ним остаётся
+             рабочий стол, а не анимация перехода в другое приложение. -->
+        <item name="android:windowIsTranslucent">true</item>
+        <!-- Без заставки и без снимка окна: при открытии окно сразу
+             рисует себя, а не фон темы без обоев или снимок, где ещё
+             виден запрос до сброса (SearchActivity.onStop). -->
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Search</item>
+    </style>
+
+    <style name="Animation.Search" parent="android:Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/search_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/search_exit</item>
     </style>
 </resources>
